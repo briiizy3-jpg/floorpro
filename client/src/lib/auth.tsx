@@ -8,6 +8,7 @@ interface AuthUser {
   plan: string;
   subscriptionStatus: string;
   trialEndsAt: string | null;
+  stripeCustomerId?: string | null;
 }
 
 interface AuthContextType {

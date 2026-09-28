@@ -48,10 +48,10 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({ result, roomWidth, roomLength, pa
     ctx.lineWidth = 2;
     ctx.strokeRect(0, 0, canvasW, canvasH);
 
-    // Plank colors — wood-like gradient
+    // Plank colors — earthy wood/stone tones
     const colors = [
-      "#C4885A", "#B87848", "#D4A06A", "#C0905A",
-      "#A06840", "#D0A070", "#BC8050", "#C89860",
+      "#A08560", "#8B7355", "#B0946A", "#9C7E58",
+      "#7A6347", "#AB8B65", "#947A55", "#A89070",
     ];
 
     const drawPlank = (plank: PlankRect, color: string) => {
@@ -97,7 +97,7 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({ result, roomWidth, roomLength, pa
 
     // Draw planks
     result.planks.forEach((plank, i) => {
-      const color = plank.isCut ? "#9A7050" : colors[i % colors.length];
+      const color = plank.isCut ? "#7A6347" : colors[i % colors.length];
       drawPlank(plank, color);
     });
 

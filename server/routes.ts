@@ -1,7 +1,10 @@
+import express from "express";
 import type { Express } from "express";
 import type { Server } from "node:http";
 import { storage } from "./storage";
+import { stripe, STRIPE_WEBHOOK_SECRET, isStripeConfigured } from "./stripe";
 import { insertUserSchema, insertProjectSchema, insertRoomSchema, insertSubscriptionSchema } from "@shared/schema";
+import type Stripe from "stripe";
 
 // Simple in-memory session (no cookies/localStorage in sandbox)
 const sessions = new Map<string, number>(); // token -> userId
@@ -46,7 +49,7 @@ export async function registerRoutes(
     }
     const token = generateToken();
     sessions.set(token, user.id);
-    res.json({ token, user: { id: user.id, username: user.username, email: user.email, plan: user.plan, subscriptionStatus: user.subscriptionStatus, trialEndsAt: user.trialEndsAt } });
+    res.json({ token, user: { id: user.id, username: user.username, email: user.email, plan: user.plan, subscriptionStatus: user.subscriptionStatus, trialEndsAt: user.trialEndsAt, stripeCustomerId: user.stripeCustomerId } });
   });
 
   app.get("/api/auth/me", async (req, res) => {
@@ -54,7 +57,7 @@ export async function registerRoutes(
     if (!userId) return res.status(401).json({ error: "Not authenticated" });
     const user = await storage.getUser(userId);
     if (!user) return res.status(401).json({ error: "Not authenticated" });
-    res.json({ id: user.id, username: user.username, email: user.email, plan: user.plan, subscriptionStatus: user.subscriptionStatus, trialEndsAt: user.trialEndsAt });
+    res.json({ id: user.id, username: user.username, email: user.email, plan: user.plan, subscriptionStatus: user.subscriptionStatus, trialEndsAt: user.trialEndsAt, stripeCustomerId: user.stripeCustomerId });
   });
 
   // ─── Projects ───
@@ -173,7 +176,85 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
-  // ─── Subscriptions ───
+  // ─── Stripe Webhook ───
+  // Handles events from Stripe Payment Links (checkout.session.completed, subscription updates)
+  app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+    if (!isStripeConfigured()) {
+      return res.status(503).json({ error: "Stripe webhook secret not configured" });
+    }
+
+    const sig = req.headers["stripe-signature"] as string;
+
+    let event: Stripe.Event;
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
+    } catch (e: any) {
+      console.error("Webhook signature verification failed:", e.message);
+      return res.status(400).json({ error: `Webhook Error: ${e.message}` });
+    }
+
+    try {
+      switch (event.type) {
+        case "checkout.session.completed": {
+          const session = event.data.object as Stripe.Checkout.Session;
+          const userId = parseInt(session.client_reference_id || "0");
+          const customerId = session.customer as string;
+          const subscriptionId = session.subscription as string;
+          const plan = session.metadata?.plan || "pro";
+
+          if (userId) {
+            await storage.updateUserStripeIds(userId, customerId, subscriptionId);
+            const isTrial = !!session.subscription_details?.trial_end;
+            await storage.updateUserPlan(userId, plan, isTrial ? "trial" : "active");
+            await storage.createSubscription({
+              userId,
+              plan,
+              amount: plan === "pro" ? 29 : 99,
+              status: "active",
+              stripeSubscriptionId: subscriptionId,
+              stripeCustomerId: customerId,
+              startDate: new Date().toISOString(),
+            });
+            console.log(`User ${userId} subscribed to ${plan} (customer: ${customerId})`);
+          }
+          break;
+        }
+
+        case "customer.subscription.updated": {
+          const sub = event.data.object as Stripe.Subscription;
+          const customerId = sub.customer as string;
+          const user = await storage.getUserByStripeCustomerId(customerId);
+          if (user) {
+            const status = sub.status === "active" ? "active" : sub.status === "trialing" ? "trial" : "inactive";
+            const plan = sub.status === "canceled" || sub.status === "unpaid" ? "free" : user.plan;
+            await storage.updateUserPlan(user.id, plan, status);
+          }
+          break;
+        }
+
+        case "customer.subscription.deleted": {
+          const sub = event.data.object as Stripe.Subscription;
+          const customerId = sub.customer as string;
+          const user = await storage.getUserByStripeCustomerId(customerId);
+          if (user) {
+            await storage.updateUserPlan(user.id, "free", "inactive");
+            await storage.cancelSubscription(user.id);
+          }
+          break;
+        }
+
+        default:
+          break;
+      }
+
+      res.json({ received: true });
+    } catch (e: any) {
+      console.error("Webhook handler error:", e);
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // ─── Subscriptions (legacy demo + Stripe-enhanced) ───
   app.post("/api/subscribe", async (req, res) => {
     const userId = getUserId(req);
     if (!userId) return res.status(401).json({ error: "Not authenticated" });

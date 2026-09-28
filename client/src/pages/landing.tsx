@@ -19,10 +19,10 @@ export default function Landing() {
           <div className="flex items-center gap-2">
             <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
               <rect width="32" height="32" rx="6" fill="hsl(var(--primary))" />
-              <rect x="4" y="4" width="11" height="11" rx="1" fill="#E8A55C" stroke="#8B5A1F" strokeWidth="1" />
-              <rect x="17" y="4" width="11" height="11" rx="1" fill="#D4904A" stroke="#8B5A1F" strokeWidth="1" />
-              <rect x="4" y="17" width="11" height="11" rx="1" fill="#D4904A" stroke="#8B5A1F" strokeWidth="1" />
-              <rect x="17" y="17" width="11" height="11" rx="1" fill="#E8A55C" stroke="#8B5A1F" strokeWidth="1" />
+              <rect x="4" y="4" width="11" height="11" rx="1" fill="#A08560" stroke="#6B5235" strokeWidth="1" />
+              <rect x="17" y="4" width="11" height="11" rx="1" fill="#8B7355" stroke="#6B5235" strokeWidth="1" />
+              <rect x="4" y="17" width="11" height="11" rx="1" fill="#8B7355" stroke="#6B5235" strokeWidth="1" />
+              <rect x="17" y="17" width="11" height="11" rx="1" fill="#A08560" stroke="#6B5235" strokeWidth="1" />
             </svg>
             <span className="font-bold text-lg" style={{ fontFamily: "var(--font-display)" }}>FloorPro</span>
           </div>
@@ -163,10 +163,10 @@ export default function Landing() {
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <svg width="20" height="20" viewBox="0 0 32 32" fill="none">
               <rect width="32" height="32" rx="6" fill="hsl(var(--primary))" />
-              <rect x="4" y="4" width="11" height="11" rx="1" fill="#E8A55C" />
-              <rect x="17" y="4" width="11" height="11" rx="1" fill="#D4904A" />
-              <rect x="4" y="17" width="11" height="11" rx="1" fill="#D4904A" />
-              <rect x="17" y="17" width="11" height="11" rx="1" fill="#E8A55C" />
+              <rect x="4" y="4" width="11" height="11" rx="1" fill="#A08560" />
+              <rect x="17" y="4" width="11" height="11" rx="1" fill="#8B7355" />
+              <rect x="4" y="17" width="11" height="11" rx="1" fill="#8B7355" />
+              <rect x="17" y="17" width="11" height="11" rx="1" fill="#A08560" />
             </svg>
             <span style={{ fontFamily: "var(--font-display)" }}>FloorPro</span>
           </div>

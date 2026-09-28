@@ -9,8 +9,10 @@ export const users = sqliteTable("users", {
   password: text("password").notNull(),
   email: text("email"),
   plan: text("plan").notNull().default("free"), // free | pro | enterprise
-  subscriptionStatus: text("subscription_status").notNull().default("inactive"), // inactive | active | trial
+  subscriptionStatus: text("subscription_status").notNull().default("inactive"), // inactive | active | trial | canceled
   trialEndsAt: text("trial_ends_at"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
   createdAt: text("created_at").notNull().default(new Date().toISOString()),
 });
 
@@ -78,6 +80,8 @@ export const subscriptions = sqliteTable("subscriptions", {
   plan: text("plan").notNull(), // pro | enterprise
   amount: real("amount").notNull(),
   status: text("status").notNull().default("active"), // active | cancelled | expired
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  stripeCustomerId: text("stripe_customer_id"),
   startDate: text("start_date").notNull().default(new Date().toISOString()),
   endDate: text("end_date"),
   createdAt: text("created_at").notNull().default(new Date().toISOString()),

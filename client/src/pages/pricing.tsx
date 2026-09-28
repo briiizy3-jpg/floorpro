@@ -1,64 +1,62 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Crown, ArrowLeft, CreditCard } from "lucide-react";
+import { Check, Crown, ArrowLeft, CreditCard, Loader2, Settings } from "lucide-react";
+
+// Stripe Payment Links (test mode)
+const PAYMENT_LINKS = {
+  pro: {
+    subscribe: "https://buy.stripe.com/test_00w9AT2Wf0VK8qJ8y133W01",
+    trial: "https://buy.stripe.com/test_5kQbJ1cwP9sgbCVcOh33W03",
+  },
+  enterprise: {
+    subscribe: "https://buy.stripe.com/test_eVq6oH40j8ocfTb5lP33W00",
+    trial: "https://buy.stripe.com/test_00w28r54n1ZO6iBdSl33W02",
+  },
+} as const;
 
 export default function Pricing() {
   const { user, token, refreshUser } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
-  const [checkoutPlan, setCheckoutPlan] = useState<string | null>(null);
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardName, setCardName] = useState("");
-  const [expDate, setExpDate] = useState("");
-  const [cvc, setCvc] = useState("");
-  const [processing, setProcessing] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
 
   const isPro = user?.plan === "pro" || user?.plan === "enterprise";
   const isTrial = user?.subscriptionStatus === "trial";
 
-  const handleSubscribe = async (plan: string) => {
+  // Check for session_id in URL (returning from Stripe Checkout)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.split("?")[1] || window.location.search);
+    const sessionId = params.get("session_id");
+    if (sessionId) {
+      toast({ title: "Subscription activated", description: "Welcome to your new plan" });
+      refreshUser();
+      // Clean up the URL
+      window.history.replaceState({}, "", window.location.pathname + window.location.hash.split("?")[0]);
+    }
+  }, []);
+
+  const handleCheckout = (plan: "pro" | "enterprise", trial: boolean) => {
     if (!token) {
       setLocation("/register");
       return;
     }
-    setProcessing(true);
-    try {
-      await apiRequest("POST", "/api/subscribe", { plan });
-      await refreshUser();
-      toast({ title: "Subscription activated", description: `You're now on the ${plan === "pro" ? "Pro" : "Enterprise"} plan` });
-      setCheckoutPlan(null);
-      setLocation("/dashboard");
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    } finally {
-      setProcessing(false);
-    }
+    const link = PAYMENT_LINKS[plan][trial ? "trial" : "subscribe"];
+    // Append client_reference_id so the webhook can identify the user
+    const url = `${link}?client_reference_id=${user?.id}`;
+    setRedirecting(true);
+    window.location.href = url;
   };
 
-  const handleTrial = async (plan: string) => {
-    if (!token) {
-      setLocation("/register");
-      return;
-    }
-    try {
-      await apiRequest("POST", "/api/subscribe/trial", { plan });
-      await refreshUser();
-      toast({ title: "Trial started", description: `14-day ${plan === "pro" ? "Pro" : "Enterprise"} trial activated` });
-      setLocation("/dashboard");
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    }
+  const handlePortal = async () => {
+    // Customer Portal requires backend Stripe API access
+    // For now, redirect to Stripe's billing portal directly
+    toast({ title: "Manage your subscription", description: "Use the link in your confirmation email from Stripe to manage your subscription." });
   };
 
   const plans = [
@@ -70,14 +68,25 @@ export default function Pricing() {
     {
       name: "Pro", price: "$29", period: "/month",
       features: ["Unlimited projects", "All 5 patterns (brick, diagonal, herringbone, chevron)", "Custom material sizes", "Advanced waste optimization", "Professional quote generation", "Priority email support"],
-      cta: "Subscribe to Pro", plan: "pro", popular: true,
+      cta: "Subscribe to Pro", plan: "pro" as const, popular: true,
     },
     {
       name: "Enterprise", price: "$99", period: "/month",
       features: ["Everything in Pro", "Team collaboration (up to 10 users)", "API access", "Custom material library", "White-label branding", "Dedicated account manager"],
-      cta: "Subscribe to Enterprise", plan: "enterprise",
+      cta: "Subscribe to Enterprise", plan: "enterprise" as const,
     },
   ];
+
+  if (redirecting) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
+          <p className="text-muted-foreground">Redirecting to secure Stripe Checkout...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -88,10 +97,10 @@ export default function Pricing() {
             <div className="flex items-center gap-2 cursor-pointer">
               <svg width="24" height="24" viewBox="0 0 32 32" fill="none">
                 <rect width="32" height="32" rx="6" fill="hsl(var(--primary))" />
-                <rect x="4" y="4" width="11" height="11" rx="1" fill="#E8A55C" />
-                <rect x="17" y="4" width="11" height="11" rx="1" fill="#D4904A" />
-                <rect x="4" y="17" width="11" height="11" rx="1" fill="#D4904A" />
-                <rect x="17" y="17" width="11" height="11" rx="1" fill="#E8A55C" />
+                <rect x="4" y="4" width="11" height="11" rx="1" fill="#A08560" />
+                <rect x="17" y="4" width="11" height="11" rx="1" fill="#8B7355" />
+                <rect x="4" y="17" width="11" height="11" rx="1" fill="#8B7355" />
+                <rect x="17" y="17" width="11" height="11" rx="1" fill="#A08560" />
               </svg>
               <span className="font-bold" style={{ fontFamily: "var(--font-display)" }}>FloorPro</span>
             </div>
@@ -117,10 +126,10 @@ export default function Pricing() {
           <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: "var(--font-display)" }}>Choose your plan</h1>
           <p className="text-muted-foreground">Upgrade anytime. Cancel anytime.</p>
           {isPro && (
-            <Badge className="mt-3"><Crown className="w-3 h-3 mr-1" /> You're on the {user?.plan === "enterprise" ? "Enterprise" : "Pro"} plan</Badge>
-          )}
-          {isTrial && (
-            <Badge variant="secondary" className="mt-3 ml-2">Trial active</Badge>
+            <div className="flex items-center justify-center gap-2 mt-3">
+              <Badge><Crown className="w-3 h-3 mr-1" /> You're on the {user?.plan === "enterprise" ? "Enterprise" : "Pro"} plan</Badge>
+              {isTrial && <Badge variant="secondary">Trial active</Badge>}
+            </div>
           )}
         </div>
 
@@ -156,7 +165,7 @@ export default function Pricing() {
                   <div className="space-y-2">
                     <Button
                       className="w-full"
-                      onClick={() => setCheckoutPlan(plan.plan!)}
+                      onClick={() => handleCheckout(plan.plan, false)}
                       data-testid={`button-subscribe-${plan.plan}`}
                     >
                       <CreditCard className="w-4 h-4 mr-1" />
@@ -165,7 +174,7 @@ export default function Pricing() {
                     <Button
                       variant="ghost"
                       className="w-full text-sm"
-                      onClick={() => handleTrial(plan.plan!)}
+                      onClick={() => handleCheckout(plan.plan, true)}
                       data-testid={`button-trial-${plan.plan}`}
                     >
                       Start 14-day free trial
@@ -183,71 +192,23 @@ export default function Pricing() {
           <div className="space-y-4">
             <div>
               <h3 className="font-semibold text-sm mb-1">Can I cancel anytime?</h3>
-              <p className="text-sm text-muted-foreground">Yes. Cancel your subscription at any time and you'll keep access until the end of your billing period.</p>
+              <p className="text-sm text-muted-foreground">Yes. Cancel your subscription at any time and you'll keep access until the end of your billing period. Use the link in your Stripe confirmation email to manage or cancel.</p>
             </div>
             <div>
               <h3 className="font-semibold text-sm mb-1">What payment methods do you accept?</h3>
-              <p className="text-sm text-muted-foreground">We accept all major credit cards. This is a demo checkout — no real charges are made.</p>
+              <p className="text-sm text-muted-foreground">We accept all major credit cards (Visa, Mastercard, American Express) through Stripe. Payments are processed securely by Stripe — we never see your card details.</p>
             </div>
             <div>
               <h3 className="font-semibold text-sm mb-1">Do you offer a free trial?</h3>
-              <p className="text-sm text-muted-foreground">Yes. Start a 14-day free trial of Pro or Enterprise with full access to all features. No credit card required.</p>
+              <p className="text-sm text-muted-foreground">Yes. Start a 14-day free trial of Pro or Enterprise with full access to all features. A credit card is required, but you won't be charged until the trial ends.</p>
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm mb-1">Is my payment information secure?</h3>
+              <p className="text-sm text-muted-foreground">Absolutely. All payments are processed by Stripe, a PCI-compliant payment processor. We never see or store your credit card information.</p>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Checkout Dialog */}
-      <Dialog open={!!checkoutPlan} onOpenChange={(v) => !v && setCheckoutPlan(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Subscribe to {checkoutPlan === "pro" ? "Pro" : "Enterprise"}</DialogTitle>
-            <DialogDescription>
-              This is a demo checkout. No real payment will be processed.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="card-name">Name on Card</Label>
-              <Input id="card-name" value={cardName} onChange={(e) => setCardName(e.target.value)} placeholder="John Smith" data-testid="input-card-name" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="card-number">Card Number</Label>
-              <Input
-                id="card-number"
-                value={cardNumber}
-                onChange={(e) => setCardNumber(e.target.value.replace(/[^0-9\s]/g, ""))}
-                placeholder="4242 4242 4242 4242"
-                data-testid="input-card-number"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="exp">Expiry</Label>
-                <Input id="exp" value={expDate} onChange={(e) => setExpDate(e.target.value)} placeholder="MM/YY" data-testid="input-exp" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="cvc">CVC</Label>
-                <Input id="cvc" value={cvc} onChange={(e) => setCvc(e.target.value.replace(/[^0-9]/g, ""))} placeholder="123" data-testid="input-cvc" />
-              </div>
-            </div>
-            <div className="rounded-lg bg-muted p-3 flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Total due today</span>
-              <span className="font-bold">${checkoutPlan === "pro" ? "29.00" : "99.00"}</span>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCheckoutPlan(null)}>Cancel</Button>
-            <Button
-              onClick={() => handleSubscribe(checkoutPlan!)}
-              disabled={processing}
-              data-testid="button-confirm-subscribe"
-            >
-              {processing ? "Processing..." : `Pay $${checkoutPlan === "pro" ? "29" : "99"}`}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
