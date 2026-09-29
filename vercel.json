@@ -4,8 +4,6 @@
   "installCommand": "echo skip",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/assets/(.*)", "destination": "/assets/:path*" },
-    { "source": "/favicon.svg", "destination": "/favicon.svg" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!assets/).*)", "destination": "/index.html" }
   ]
 }
