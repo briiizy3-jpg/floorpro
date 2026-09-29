@@ -244,6 +244,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                 roomWidth={width}
                 roomLength={length}
                 pattern={pattern}
+                staggerInches={staggerInches}
               />
             </div>
             {/* Stats bar */}

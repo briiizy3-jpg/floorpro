@@ -6,9 +6,10 @@ interface LayoutCanvasProps {
   roomWidth: number;
   roomLength: number;
   pattern: string;
+  staggerInches?: number;
 }
 
-const LayoutCanvas: FC<LayoutCanvasProps> = ({ result, roomWidth, roomLength, pattern }) => {
+const LayoutCanvas: FC<LayoutCanvasProps> = ({ result, roomWidth, roomLength, pattern, staggerInches = 0 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -112,7 +113,98 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({ result, roomWidth, roomLength, pa
     ctx.rotate(-Math.PI / 2);
     ctx.fillText(`${roomLength}'`, 0, 0);
     ctx.restore();
-  }, [result, roomWidth, roomLength, pattern]);
+
+    // Stagger indicator — show drop-back distance between first two rows
+    if (staggerInches > 0 && result.planks.length > 1) {
+      // Find the first two distinct rows (different y values)
+      const rows = [...new Set(result.planks.map((p) => Math.round(p.y * 100) / 100))];
+      if (rows.length >= 2) {
+        const row1Y = rows[0] * scale;
+        const row2Y = rows[1] * scale;
+
+        // Find the leftmost plank in row 2 to get the stagger offset
+        const row2Planks = result.planks.filter((p) => Math.abs(p.y - rows[1]) < 0.01);
+        const row1Planks = result.planks.filter((p) => Math.abs(p.y - rows[0]) < 0.01);
+        const row1Left = row1Planks.length > 0 ? row1Planks[0].x : 0;
+        const row2Left = row2Planks.length > 0 ? row2Planks[0].x : 0;
+        const staggerFt = staggerInches / 12;
+        const staggerPx = staggerFt * scale;
+
+        // Draw stagger indicator on the left side of the canvas
+        const indicatorX = -8; // just outside the room outline on the left
+        const arrowStartY = row1Y;
+        const arrowEndY = row2Y;
+
+        ctx.save();
+        ctx.strokeStyle = "#8B6F47";
+        ctx.fillStyle = "#8B6F47";
+        ctx.lineWidth = 1.5;
+
+        // Vertical bracket showing row height (plank width)
+        ctx.beginPath();
+        ctx.moveTo(indicatorX, arrowStartY);
+        ctx.lineTo(indicatorX, arrowEndY);
+        ctx.stroke();
+
+        // Arrowheads
+        ctx.beginPath();
+        ctx.moveTo(indicatorX - 3, arrowStartY + 4);
+        ctx.lineTo(indicatorX, arrowStartY);
+        ctx.lineTo(indicatorX + 3, arrowStartY + 4);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(indicatorX - 3, arrowEndY - 4);
+        ctx.lineTo(indicatorX, arrowEndY);
+        ctx.lineTo(indicatorX + 3, arrowEndY - 4);
+        ctx.stroke();
+
+        // Horizontal stagger arrow showing the drop-back distance
+        if (staggerPx > 2) {
+          const arrowY = row2Y + 2;
+          const hx1 = row1Left * scale;
+          const hx2 = (row1Left + staggerFt) * scale;
+
+          ctx.strokeStyle = "#8B6F47";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(hx1, arrowY);
+          ctx.lineTo(hx2, arrowY);
+          ctx.stroke();
+
+          // Arrowhead pointing right
+          ctx.beginPath();
+          ctx.moveTo(hx2 - 4, arrowY - 3);
+          ctx.lineTo(hx2, arrowY);
+          ctx.lineTo(hx2 - 4, arrowY + 3);
+          ctx.stroke();
+
+          // Stagger distance label
+          ctx.font = "600 10px Satoshi, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          const labelY = arrowY - 4;
+          const labelX = (hx1 + hx2) / 2;
+
+          // Label background
+          const labelText = `${staggerInches}" stagger`;
+          ctx.font = "600 10px Satoshi, sans-serif";
+          const metrics = ctx.measureText(labelText);
+          const labelW = metrics.width + 8;
+          const labelH = 14;
+          ctx.fillStyle = "hsl(var(--background))";
+          ctx.fillRect(labelX - labelW / 2, labelY - labelH, labelW, labelH);
+          ctx.strokeStyle = "#8B6F47";
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(labelX - labelW / 2, labelY - labelH, labelW, labelH);
+
+          ctx.fillStyle = "#8B6F47";
+          ctx.fillText(labelText, labelX, labelY - 2);
+        }
+
+        ctx.restore();
+      }
+    }
+  }, [result, roomWidth, roomLength, pattern, staggerInches]);
 
   return (
     <div className="flex flex-col items-center justify-center p-4">
