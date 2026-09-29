@@ -3,7 +3,7 @@ import { Link, useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
-import { calculateLayout, MATERIAL_PRESETS, PATTERN_INFO, type LayoutParams } from "@/lib/layout-engine";
+import { calculateLayout, MATERIAL_PRESETS, PATTERN_INFO, SHAPE_INFO, type LayoutParams, type RoomShape, type Doorway, type Closet } from "@/lib/layout-engine";
 import LayoutCanvas from "@/components/layout-canvas";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -164,6 +164,11 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
   const [materialWidth, setMaterialWidth] = useState(room.materialWidth || 5);
   const [materialLength, setMaterialLength] = useState(room.materialLength || 48);
   const [staggerInches, setStaggerInches] = useState(room.staggerInches || 12);
+  const [roomShape, setRoomShape] = useState<RoomShape>(room.roomShape || "rectangular");
+  const [doorways, setDoorways] = useState<Doorway[]>(room.doorways || []);
+  const [closets, setClosets] = useState<Closet[]>(room.closets || []);
+  const [showDoorwayDialog, setShowDoorwayDialog] = useState(false);
+  const [showClosetDialog, setShowClosetDialog] = useState(false);
 
   const updateRoom = useMutation({
     mutationFn: async (data: any) => {
@@ -181,11 +186,11 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
   useEffect(() => {
     const timer = setTimeout(() => {
       updateRoom.mutate({
-        name, width, length, materialType, pattern, wasteFactor, pricePerSqft, laborPerSqft, materialWidth, materialLength, staggerInches,
+        name, width, length, materialType, pattern, wasteFactor, pricePerSqft, laborPerSqft, materialWidth, materialLength, staggerInches, roomShape, doorways, closets,
       });
     }, 800);
     return () => clearTimeout(timer);
-  }, [name, width, length, materialType, pattern, wasteFactor, pricePerSqft, laborPerSqft, materialWidth, materialLength, staggerInches]);
+  }, [name, width, length, materialType, pattern, wasteFactor, pricePerSqft, laborPerSqft, materialWidth, materialLength, staggerInches, roomShape, doorways, closets]);
 
   const layoutResult = useMemo(() => {
     return calculateLayout({
@@ -198,8 +203,11 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
       pricePerSqft,
       laborPerSqft,
       staggerInches,
+      roomShape,
+      doorways,
+      closets,
     } as LayoutParams);
-  }, [width, length, materialWidth, materialLength, pattern, wasteFactor, pricePerSqft, laborPerSqft, staggerInches]);
+  }, [width, length, materialWidth, materialLength, pattern, wasteFactor, pricePerSqft, laborPerSqft, staggerInches, roomShape, doorways, closets]);
 
   const handlePatternChange = (newPattern: string) => {
     if (isFree && newPattern !== "straight") {
@@ -245,13 +253,16 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                 roomLength={length}
                 pattern={pattern}
                 staggerInches={staggerInches}
+                roomShape={roomShape}
+                doorways={doorways}
+                closets={closets}
               />
             </div>
             {/* Stats bar */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
               <StatCard icon={Layers} label="Total Pieces" value={layoutResult.totalPlanks.toString()} sub={`${layoutResult.fullPlanks} full, ${layoutResult.cutPlanks} cut`} />
               <StatCard icon={Scissors} label="Material Needed" value={`${layoutResult.materialNeeded} boxes`} sub={`${layoutResult.materialArea.toFixed(0)} sq ft`} />
-              <StatCard icon={Ruler} label="Room Area" value={`${layoutResult.roomArea.toFixed(0)} sq ft`} sub={`Waste: ${layoutResult.wastePercentage.toFixed(1)}%`} />
+              <StatCard icon={Ruler} label="Room Area" value={`${layoutResult.roomArea.toFixed(0)} sq ft`} sub={layoutResult.doorwayCuts > 0 ? `${layoutResult.doorwayCuts} doorway cuts` : `Waste: ${layoutResult.wastePercentage.toFixed(1)}%`} />
               <StatCard icon={DollarSign} label="Total Cost" value={`$${layoutResult.totalCost.toFixed(0)}`} sub={`$${layoutResult.cost.toFixed(0)} mat + $${layoutResult.laborCost.toFixed(0)} labor`} />
             </div>
           </div>
@@ -289,6 +300,74 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
 
             <Separator />
 
+            {/* Room Shape */}
+            <div className="space-y-3">
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Room Shape</Label>
+              <Select value={roomShape} onValueChange={(v) => setRoomShape(v as RoomShape)}>
+                <SelectTrigger data-testid={`select-shape-${room.id}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SHAPE_INFO).map(([key, info]) => (
+                    <SelectItem key={key} value={key}>{info.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">{SHAPE_INFO[roomShape]?.description}</p>
+            </div>
+
+            <Separator />
+
+            {/* Doorways */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Doorways</Label>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowDoorwayDialog(true)}>+ Add Door</Button>
+              </div>
+              {doorways.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No doorways added. Planks near doorways get special cut markers.</p>
+              ) : (
+                <div className="space-y-1">
+                  {doorways.map((d) => (
+                    <div key={d.id} className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full" style={{ background: "#D97706" }}></span>
+                        {d.label} — {d.wall} wall, {d.offset}' in, {d.width}' wide
+                      </span>
+                      <Button size="sm" variant="ghost" className="h-5 text-xs px-1" onClick={() => setDoorways(doorways.filter((x) => x.id !== d.id))}>×</Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Closets */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Closets</Label>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowClosetDialog(true)}>+ Add Closet</Button>
+              </div>
+              {closets.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No closets added. Add walk-in or reach-in closets to calculate those areas separately.</p>
+              ) : (
+                <div className="space-y-1">
+                  {closets.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1">
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full" style={{ background: "#2563EB" }}></span>
+                        {c.label} — {c.w}'×{c.h}' at ({c.x}',{c.y}')
+                      </span>
+                      <Button size="sm" variant="ghost" className="h-5 text-xs px-1" onClick={() => setClosets(closets.filter((x) => x.id !== c.id))}>×</Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
             {/* Material */}
             <div className="space-y-3">
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Material</Label>
@@ -308,6 +387,11 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                   <SelectItem value="tile">Tile</SelectItem>
                   <SelectItem value="carpet">Carpet Roll</SelectItem>
                   <SelectItem value="sheet">Sheet Vinyl</SelectItem>
+                  <SelectItem value="hardwood">Hardwood</SelectItem>
+                  <SelectItem value="stone">Natural Stone</SelectItem>
+                  <SelectItem value="linoleum">Linoleum</SelectItem>
+                  <SelectItem value="cork">Cork</SelectItem>
+                  <SelectItem value="bamboo">Bamboo</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -422,6 +506,20 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
           </div>
         </div>
       </CardContent>
+      <AddDoorwayDialog
+        open={showDoorwayDialog}
+        onOpenChange={setShowDoorwayDialog}
+        doorways={doorways}
+        setDoorways={setDoorways}
+        roomWidth={width}
+        roomLength={length}
+      />
+      <AddClosetDialog
+        open={showClosetDialog}
+        onOpenChange={setShowClosetDialog}
+        closets={closets}
+        setClosets={setClosets}
+      />
     </Card>
   );
 }
@@ -516,6 +614,11 @@ function AddRoomDialog({ open, onOpenChange, projectId, isFree, token, onSuccess
                 <SelectItem value="tile">Tile</SelectItem>
                 <SelectItem value="carpet">Carpet Roll</SelectItem>
                 <SelectItem value="sheet">Sheet Vinyl</SelectItem>
+                <SelectItem value="hardwood">Hardwood</SelectItem>
+                <SelectItem value="stone">Natural Stone</SelectItem>
+                <SelectItem value="linoleum">Linoleum</SelectItem>
+                <SelectItem value="cork">Cork</SelectItem>
+                <SelectItem value="bamboo">Bamboo</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -544,6 +647,146 @@ function AddRoomDialog({ open, onOpenChange, projectId, isFree, token, onSuccess
           <Button onClick={handleCreate} disabled={creating} data-testid="button-create-room">
             {creating ? "Adding..." : "Add Room"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Add Doorway Dialog ───
+function AddDoorwayDialog({ open, onOpenChange, doorways, setDoorways, roomWidth, roomLength }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  doorways: Doorway[];
+  setDoorways: (d: Doorway[]) => void;
+  roomWidth: number;
+  roomLength: number;
+}) {
+  const [label, setLabel] = useState("");
+  const [wall, setWall] = useState<"north" | "south" | "east" | "west">("north");
+  const [offset, setOffset] = useState(2);
+  const [width, setWidth] = useState(3);
+
+  const handleAdd = () => {
+    const id = `door-${Date.now()}`;
+    const newDoor: Doorway = {
+      id, label: label || `Door ${doorways.length + 1}`, wall, offset, width,
+    };
+    setDoorways([...doorways, newDoor]);
+    setLabel("");
+    setOffset(2);
+    setWidth(3);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add Doorway</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label>Door Label</Label>
+            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Front Door, Closet Door" />
+          </div>
+          <div className="space-y-2">
+            <Label>Wall</Label>
+            <Select value={wall} onValueChange={(v) => setWall(v as any)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="north">North (top)</SelectItem>
+                <SelectItem value="south">South (bottom)</SelectItem>
+                <SelectItem value="west">West (left)</SelectItem>
+                <SelectItem value="east">East (right)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Offset from corner (ft)</Label>
+              <Input type="number" step="0.5" value={offset} onChange={(e) => setOffset(parseFloat(e.target.value) || 0)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Door width (ft)</Label>
+              <Input type="number" step="0.5" value={width} onChange={(e) => setWidth(parseFloat(e.target.value) || 0)} />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">Planks within 1' of the door opening will be highlighted as doorway cuts on the layout.</p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={handleAdd}>Add Doorway</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Add Closet Dialog ───
+function AddClosetDialog({ open, onOpenChange, closets, setClosets }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  closets: Closet[];
+  setClosets: (c: Closet[]) => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [x, setX] = useState(0);
+  const [y, setY] = useState(0);
+  const [w, setW] = useState(4);
+  const [h, setH] = useState(6);
+  const [hasDoor, setHasDoor] = useState(true);
+
+  const handleAdd = () => {
+    const id = `closet-${Date.now()}`;
+    const newCloset: Closet = {
+      id, label: label || `Closet ${closets.length + 1}`, x, y, w, h,
+      hasDoor, doorWall: hasDoor ? "north" : null, doorOffset: 0.5, doorWidth: 2.5,
+    };
+    setClosets([...closets, newCloset]);
+    setLabel("");
+    setX(0); setY(0); setW(4); setH(6);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add Closet</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label>Closet Label</Label>
+            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Walk-in Closet, Reach-in" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>X position (ft)</Label>
+              <Input type="number" step="0.5" value={x} onChange={(e) => setX(parseFloat(e.target.value) || 0)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Y position (ft)</Label>
+              <Input type="number" step="0.5" value={y} onChange={(e) => setY(parseFloat(e.target.value) || 0)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Width (ft)</Label>
+              <Input type="number" step="0.5" value={w} onChange={(e) => setW(parseFloat(e.target.value) || 0)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Height (ft)</Label>
+              <Input type="number" step="0.5" value={h} onChange={(e) => setH(parseFloat(e.target.value) || 0)} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="has-door" checked={hasDoor} onChange={(e) => setHasDoor(e.target.checked)} />
+            <Label htmlFor="has-door">Has door opening</Label>
+          </div>
+          <p className="text-xs text-muted-foreground">Position is from the top-left corner of the room. Closet planks are highlighted blue on the layout.</p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={handleAdd}>Add Closet</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
