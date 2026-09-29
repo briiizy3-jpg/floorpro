@@ -1,4 +1,4 @@
-import { useRef, useEffect, type FC } from "react";
+import { useRef, useEffect, useState, useCallback, type FC } from "react";
 import type { LayoutResult, PlankRect, Doorway, Closet, RoomShape } from "@/lib/layout-engine";
 
 interface LayoutCanvasProps {
@@ -10,7 +10,16 @@ interface LayoutCanvasProps {
   roomShape?: RoomShape;
   doorways?: Doorway[];
   closets?: Closet[];
+  onDoorwayMove?: (id: string, offset: number) => void;
+  onClosetMove?: (id: string, x: number, y: number) => void;
+  onClosetResize?: (id: string, w: number, h: number) => void;
 }
+
+type DragTarget =
+  | { type: "doorway"; id: string; wall: string }
+  | { type: "closet"; id: string }
+  | { type: "closet-resize"; id: string }
+  | null;
 
 const LayoutCanvas: FC<LayoutCanvasProps> = ({
   result,
@@ -21,8 +30,154 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
   roomShape = "rectangular",
   doorways = [],
   closets = [],
+  onDoorwayMove,
+  onClosetMove,
+  onClosetResize,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [dragTarget, setDragTarget] = useState<DragTarget>(null);
+  const [hoverTarget, setHoverTarget] = useState<DragTarget>(null);
+  const scaleRef = useRef(1);
+  const padRef = useRef(30);
+
+  const getRoomCoords = useCallback(
+    (clientX: number, clientY: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return { x: 0, y: 0 };
+      const rect = canvas.getBoundingClientRect();
+      const pad = padRef.current;
+      const scale = scaleRef.current;
+      const x = (clientX - rect.left - pad) / scale;
+      const y = (clientY - rect.top - pad) / scale;
+      return { x, y };
+    },
+    []
+  );
+
+  // Check if a point is on a doorway
+  const hitTestDoorway = useCallback(
+    (px: number, py: number): DragTarget | null => {
+      const threshold = 1.5; // feet
+      for (const d of doorways) {
+        const doorW = d.width;
+        const doorOff = d.offset;
+        switch (d.wall) {
+          case "north":
+            if (py < threshold && px >= doorOff - 0.5 && px <= doorOff + doorW + 0.5)
+              return { type: "doorway", id: d.id, wall: d.wall };
+            break;
+          case "south":
+            if (py > roomLength - threshold && px >= doorOff - 0.5 && px <= doorOff + doorW + 0.5)
+              return { type: "doorway", id: d.id, wall: d.wall };
+            break;
+          case "west":
+            if (px < threshold && py >= doorOff - 0.5 && py <= doorOff + doorW + 0.5)
+              return { type: "doorway", id: d.id, wall: d.wall };
+            break;
+          case "east":
+            if (px > roomWidth - threshold && py >= doorOff - 0.5 && py <= doorOff + doorW + 0.5)
+              return { type: "doorway", id: d.id, wall: d.wall };
+            break;
+        }
+      }
+      return null;
+    },
+    [doorways, roomWidth, roomLength]
+  );
+
+  // Check if a point is on a closet or its resize handle
+  const hitTestCloset = useCallback(
+    (px: number, py: number): DragTarget | null => {
+      const handleSize = 1.0; // feet
+      for (const c of closets) {
+        // Check resize handle (bottom-right corner)
+        if (
+          px >= c.x + c.w - handleSize &&
+          px <= c.x + c.w + handleSize &&
+          py >= c.y + c.h - handleSize &&
+          py <= c.y + c.h + handleSize
+        ) {
+          return { type: "closet-resize", id: c.id };
+        }
+        // Check body
+        if (px >= c.x && px <= c.x + c.w && py >= c.y && py <= c.y + c.h) {
+          return { type: "closet", id: c.id };
+        }
+      }
+      return null;
+    },
+    [closets]
+  );
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      const { x, y } = getRoomCoords(e.clientX, e.clientY);
+      // Check closets first (they're on top)
+      const closetHit = hitTestCloset(x, y);
+      if (closetHit) {
+        setDragTarget(closetHit);
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        return;
+      }
+      const doorwayHit = hitTestDoorway(x, y);
+      if (doorwayHit) {
+        setDragTarget(doorwayHit);
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      }
+    },
+    [getRoomCoords, hitTestCloset, hitTestDoorway]
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      const { x, y } = getRoomCoords(e.clientX, e.clientY);
+
+      // Update hover state
+      if (!dragTarget) {
+        const hit = hitTestCloset(x, y) || hitTestDoorway(x, y);
+        const hitId = hit?.id || null;
+        setHoverTarget((prev) => {
+          if (prev?.id === hitId) return prev;
+          return hit;
+        });
+        return;
+      }
+
+      if (dragTarget.type === "doorway") {
+        const doorway = doorways.find((d) => d.id === dragTarget.id);
+        if (!doorway) return;
+        // Move along the wall
+        let newOffset: number;
+        if (doorway.wall === "north" || doorway.wall === "south") {
+          newOffset = Math.max(0, Math.min(roomWidth - doorway.width, x - doorway.width / 2));
+        } else {
+          newOffset = Math.max(0, Math.min(roomLength - doorway.width, y - doorway.width / 2));
+        }
+        onDoorwayMove?.(dragTarget.id, newOffset);
+      } else if (dragTarget.type === "closet") {
+        const closet = closets.find((c) => c.id === dragTarget.id);
+        if (!closet) return;
+        const newX = Math.max(0, Math.min(roomWidth - closet.w, x - closet.w / 2));
+        const newY = Math.max(0, Math.min(roomLength - closet.h, y - closet.h / 2));
+        onClosetMove?.(dragTarget.id, newX, newY);
+      } else if (dragTarget.type === "closet-resize") {
+        const closet = closets.find((c) => c.id === dragTarget.id);
+        if (!closet) return;
+        const newW = Math.max(2, Math.min(roomWidth - closet.x, x - closet.x));
+        const newH = Math.max(2, Math.min(roomLength - closet.y, y - closet.y));
+        onClosetResize?.(dragTarget.id, newW, newH);
+      }
+    },
+    [getRoomCoords, dragTarget, doorways, closets, roomWidth, roomLength, onDoorwayMove, onClosetMove, onClosetResize, hitTestCloset, hitTestDoorway]
+  );
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      setDragTarget(null);
+      (e.target as HTMLElement).releasePointerCapture?.(e.pointerId);
+    },
+    []
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -35,17 +190,16 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
     const maxWidth = (container?.clientWidth || 600) - 40;
     const maxHeight = 500;
 
-    // Scale to fit
     const scaleX = maxWidth / roomWidth;
     const scaleY = maxHeight / roomLength;
     const scale = Math.min(scaleX, scaleY);
+    scaleRef.current = scale;
 
     const canvasW = roomWidth * scale;
     const canvasH = roomLength * scale;
-
-    // Extra padding for doorway labels
     const padX = 30;
     const padY = 20;
+    padRef.current = padX;
 
     canvas.width = (canvasW + padX * 2) * dpr;
     canvas.height = (canvasH + padY * 2) * dpr;
@@ -54,14 +208,13 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
     ctx.scale(dpr, dpr);
     ctx.translate(padX, padY);
 
-    // Clear
     ctx.clearRect(-padX, -padY, canvasW + padX * 2, canvasH + padY * 2);
 
     // Background
     ctx.fillStyle = "hsl(var(--muted))";
     ctx.fillRect(0, 0, canvasW, canvasH);
 
-    // Draw room shape outline
+    // Room shape outline
     ctx.save();
     ctx.strokeStyle = "hsl(var(--foreground))";
     ctx.lineWidth = 2.5;
@@ -70,7 +223,6 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       ctx.beginPath();
       ctx.ellipse(canvasW / 2, canvasH / 2, canvasW / 2, canvasH / 2, 0, 0, Math.PI * 2);
       ctx.stroke();
-      // Clip to circle
       ctx.clip();
     } else if (roomShape === "octagonal") {
       const cutX = canvasW * 0.3;
@@ -105,7 +257,7 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
     }
     ctx.restore();
 
-    // Plank colors — earthy wood/stone tones
+    // Plank colors
     const colors = [
       "#A08560", "#8B7355", "#B0946A", "#9C7E58",
       "#7A6347", "#AB8B65", "#947A55", "#A89070",
@@ -124,11 +276,9 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
         ctx.translate(-(px + pw / 2), -(py + ph / 2));
       }
 
-      // Fill
       ctx.fillStyle = color;
       ctx.fillRect(px, py, pw, ph);
 
-      // Wood grain lines
       if (pw > ph) {
         ctx.strokeStyle = "rgba(0,0,0,0.08)";
         ctx.lineWidth = 0.5;
@@ -141,13 +291,10 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
         }
       }
 
-      // Border
       if (plank.isDoorwayCut) {
-        // Highlight doorway cuts in orange
         ctx.strokeStyle = "#D97706";
         ctx.lineWidth = 1.5;
       } else if (plank.isClosetPlank) {
-        // Highlight closet planks in blue
         ctx.strokeStyle = "#2563EB";
         ctx.lineWidth = 1.0;
       } else {
@@ -161,29 +308,28 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       }
     };
 
-    // Draw planks
     result.planks.forEach((plank, i) => {
       let color = plank.isCut ? "#7A6347" : colors[i % colors.length];
-      if (plank.isClosetPlank) color = "#6B7E8C"; // blue-gray for closet
-      if (plank.isDoorwayCut) color = "#C68642"; // orange for doorway
+      if (plank.isClosetPlank) color = "#6B7E8C";
+      if (plank.isDoorwayCut) color = "#C68642";
       drawPlank(plank, color);
     });
 
-    // Draw closet areas
+    // Draw closets
     closets.forEach((c) => {
       const cx = c.x * scale;
       const cy = c.y * scale;
       const cw = c.w * scale;
       const ch = c.h * scale;
+      const isHovered = hoverTarget?.id === c.id && (hoverTarget.type === "closet" || hoverTarget.type === "closet-resize");
+      const isDragging = dragTarget?.id === c.id;
 
-      // Closet outline (dashed)
       ctx.save();
-      ctx.strokeStyle = "#2563EB";
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = isDragging || isHovered ? "#1D4ED8" : "#2563EB";
+      ctx.lineWidth = isDragging ? 2.5 : isHovered ? 2 : 1.5;
       ctx.setLineDash([4, 3]);
       ctx.strokeRect(cx, cy, cw, ch);
 
-      // Label
       ctx.setLineDash([]);
       ctx.fillStyle = "rgba(37, 99, 235, 0.08)";
       ctx.fillRect(cx, cy, cw, ch);
@@ -194,7 +340,17 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       ctx.textBaseline = "middle";
       ctx.fillText(c.label || "Closet", cx + cw / 2, cy + ch / 2);
 
-      // Draw closet door opening
+      // Resize handle (bottom-right corner)
+      const handleR = 6;
+      ctx.fillStyle = isHovered && hoverTarget?.type === "closet-resize" ? "#1D4ED8" : "#2563EB";
+      ctx.beginPath();
+      ctx.arc(cx + cw, cy + ch, handleR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Door opening
       if (c.hasDoor && c.doorWall) {
         ctx.strokeStyle = "#2563EB";
         ctx.lineWidth = 3;
@@ -224,29 +380,30 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
 
     // Draw doorways
     doorways.forEach((d) => {
-      ctx.save();
-      ctx.strokeStyle = "#D97706";
-      ctx.lineWidth = 4;
-
       const doorW = d.width * scale;
       const doorOff = d.offset * scale;
+      const isHovered = hoverTarget?.id === d.id;
+      const isDragging = dragTarget?.id === d.id;
 
-      // Draw door opening as a gap in the wall
+      ctx.save();
+      ctx.strokeStyle = isDragging ? "#B45309" : isHovered ? "#D97706" : "#D97706";
+      ctx.lineWidth = isDragging ? 6 : isHovered ? 5 : 4;
+
       ctx.beginPath();
       switch (d.wall) {
-        case "north": // top wall
+        case "north":
           ctx.moveTo(doorOff, 0);
           ctx.lineTo(doorOff + doorW, 0);
           break;
-        case "south": // bottom wall
+        case "south":
           ctx.moveTo(doorOff, canvasH);
           ctx.lineTo(doorOff + doorW, canvasH);
           break;
-        case "west": // left wall
+        case "west":
           ctx.moveTo(0, doorOff);
           ctx.lineTo(0, doorOff + doorW);
           break;
-        case "east": // right wall
+        case "east":
           ctx.moveTo(canvasW, doorOff);
           ctx.lineTo(canvasW, doorOff + doorW);
           break;
@@ -276,7 +433,24 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Door label
+      // Drag handle indicator (circle at center of door)
+      const handleR = isHovered || isDragging ? 6 : 4;
+      let hx = 0, hy = 0;
+      switch (d.wall) {
+        case "north": hx = doorOff + doorW / 2; hy = 0; break;
+        case "south": hx = doorOff + doorW / 2; hy = canvasH; break;
+        case "west": hx = 0; hy = doorOff + doorW / 2; break;
+        case "east": hx = canvasW; hy = doorOff + doorW / 2; break;
+      }
+      ctx.fillStyle = isDragging ? "#B45309" : isHovered ? "#D97706" : "rgba(217, 119, 6, 0.7)";
+      ctx.beginPath();
+      ctx.arc(hx, hy, handleR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Label
       ctx.fillStyle = "#D97706";
       ctx.font = "600 9px Satoshi, sans-serif";
       ctx.textAlign = "center";
@@ -351,12 +525,29 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
         }
       }
     }
-  }, [result, roomWidth, roomLength, pattern, staggerInches, roomShape, doorways, closets]);
+  }, [result, roomWidth, roomLength, pattern, staggerInches, roomShape, doorways, closets, hoverTarget, dragTarget]);
+
+  const cursor = dragTarget
+    ? dragTarget.type === "closet-resize"
+      ? "nwse-resize"
+      : "grabbing"
+    : hoverTarget
+      ? hoverTarget.type === "closet-resize"
+        ? "nwse-resize"
+        : "grab"
+      : "default";
 
   return (
     <div className="flex flex-col items-center justify-center p-4">
-      <canvas ref={canvasRef} className="rounded-lg shadow-md" />
-      {/* Legend */}
+      <canvas
+        ref={canvasRef}
+        className="rounded-lg shadow-md touch-none select-none"
+        style={{ cursor }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      />
       <div className="flex flex-wrap gap-3 mt-2 text-xs">
         <span className="flex items-center gap-1">
           <span className="w-3 h-3 rounded border border-[#D97706]" style={{ background: "#C68642" }}></span>
@@ -371,6 +562,9 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
           Cut plank
         </span>
       </div>
+      <p className="text-xs text-muted-foreground mt-1">
+        Drag doorways along walls · Drag closets to reposition · Drag blue corner to resize
+      </p>
     </div>
   );
 };

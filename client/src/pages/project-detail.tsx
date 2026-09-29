@@ -256,6 +256,9 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                 roomShape={roomShape}
                 doorways={doorways}
                 closets={closets}
+                onDoorwayMove={(id, offset) => setDoorways(doorways.map((d) => d.id === id ? { ...d, offset: Math.round(offset * 10) / 10 } : d))}
+                onClosetMove={(id, x, y) => setClosets(closets.map((c) => c.id === id ? { ...c, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 } : c))}
+                onClosetResize={(id, w, h) => setClosets(closets.map((c) => c.id === id ? { ...c, w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 } : c))}
               />
             </div>
             {/* Stats bar */}
