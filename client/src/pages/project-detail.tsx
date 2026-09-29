@@ -330,14 +330,56 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
               {doorways.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No doorways added. Planks near doorways get special cut markers.</p>
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {doorways.map((d) => (
-                    <div key={d.id} className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1">
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full" style={{ background: "#D97706" }}></span>
-                        {d.label} — {d.wall} wall, {d.offset}' in, {d.width}' wide
-                      </span>
-                      <Button size="sm" variant="ghost" className="h-5 text-xs px-1" onClick={() => setDoorways(doorways.filter((x) => x.id !== d.id))}>×</Button>
+                    <div key={d.id} className="bg-muted/50 rounded px-2 py-2 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <input
+                          type="text"
+                          value={d.label}
+                          onChange={(e) => setDoorways(doorways.map((x) => x.id === d.id ? { ...x, label: e.target.value } : x))}
+                          className="text-xs font-medium bg-transparent border-none outline-none flex-1 min-w-0"
+                          placeholder="Door label"
+                        />
+                        <Button size="sm" variant="ghost" className="h-5 text-xs px-1 shrink-0" onClick={() => setDoorways(doorways.filter((x) => x.id !== d.id))}>×</Button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">Wall</Label>
+                          <select
+                            value={d.wall}
+                            onChange={(e) => setDoorways(doorways.map((x) => x.id === d.id ? { ...x, wall: e.target.value as any } : x))}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          >
+                            <option value="north">North</option>
+                            <option value="south">South</option>
+                            <option value="west">West</option>
+                            <option value="east">East</option>
+                          </select>
+                        </div>
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">Offset (ft)</Label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={d.offset}
+                            onChange={(e) => setDoorways(doorways.map((x) => x.id === d.id ? { ...x, offset: parseFloat(e.target.value) || 0 } : x))}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">Width (ft)</Label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="1"
+                            value={d.width}
+                            onChange={(e) => setDoorways(doorways.map((x) => x.id === d.id ? { ...x, width: parseFloat(e.target.value) || 0 } : x))}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          />
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -355,14 +397,109 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
               {closets.length === 0 ? (
                 <p className="text-xs text-muted-foreground">No closets added. Add walk-in or reach-in closets to calculate those areas separately.</p>
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {closets.map((c) => (
-                    <div key={c.id} className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1">
-                      <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full" style={{ background: "#2563EB" }}></span>
-                        {c.label} — {c.w}'×{c.h}' at ({c.x}',{c.y}')
-                      </span>
-                      <Button size="sm" variant="ghost" className="h-5 text-xs px-1" onClick={() => setClosets(closets.filter((x) => x.id !== c.id))}>×</Button>
+                    <div key={c.id} className="bg-muted/50 rounded px-2 py-2 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <input
+                          type="text"
+                          value={c.label}
+                          onChange={(e) => setClosets(closets.map((x) => x.id === c.id ? { ...x, label: e.target.value } : x))}
+                          className="text-xs font-medium bg-transparent border-none outline-none flex-1 min-w-0"
+                          placeholder="Closet label"
+                        />
+                        <Button size="sm" variant="ghost" className="h-5 text-xs px-1 shrink-0" onClick={() => setClosets(closets.filter((x) => x.id !== c.id))}>×</Button>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">X (ft)</Label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={c.x}
+                            onChange={(e) => setClosets(closets.map((x) => x.id === c.id ? { ...x, x: parseFloat(e.target.value) || 0 } : x))}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">Y (ft)</Label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={c.y}
+                            onChange={(e) => setClosets(closets.map((x) => x.id === c.id ? { ...x, y: parseFloat(e.target.value) || 0 } : x))}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">W (ft)</Label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="2"
+                            value={c.w}
+                            onChange={(e) => setClosets(closets.map((x) => x.id === c.id ? { ...x, w: parseFloat(e.target.value) || 0 } : x))}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">H (ft)</Label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="2"
+                            value={c.h}
+                            onChange={(e) => setClosets(closets.map((x) => x.id === c.id ? { ...x, h: parseFloat(e.target.value) || 0 } : x))}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id={`has-door-${c.id}`}
+                          checked={c.hasDoor}
+                          onChange={(e) => setClosets(closets.map((x) => x.id === c.id ? { ...x, hasDoor: e.target.checked, doorWall: e.target.checked ? (x.doorWall || "north") : null } : x))}
+                          className="h-3 w-3"
+                        />
+                        <Label htmlFor={`has-door-${c.id}`} className="text-[10px] text-muted-foreground cursor-pointer">Has door opening</Label>
+                        {c.hasDoor && (
+                          <>
+                            <select
+                              value={c.doorWall || "north"}
+                              onChange={(e) => setClosets(closets.map((x) => x.id === c.id ? { ...x, doorWall: e.target.value as any } : x))}
+                              className="text-[10px] rounded border border-border bg-background px-1 py-0.5 h-5"
+                            >
+                              <option value="north">N</option>
+                              <option value="south">S</option>
+                              <option value="west">W</option>
+                              <option value="east">E</option>
+                            </select>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              value={c.doorOffset}
+                              onChange={(e) => setClosets(closets.map((x) => x.id === c.id ? { ...x, doorOffset: parseFloat(e.target.value) || 0 } : x))}
+                              className="text-[10px] w-12 rounded border border-border bg-background px-1 py-0.5 h-5"
+                              placeholder="Off"
+                            />
+                            <span className="text-[10px] text-muted-foreground">door off</span>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="1"
+                              value={c.doorWidth}
+                              onChange={(e) => setClosets(closets.map((x) => x.id === c.id ? { ...x, doorWidth: parseFloat(e.target.value) || 0 } : x))}
+                              className="text-[10px] w-12 rounded border border-border bg-background px-1 py-0.5 h-5"
+                              placeholder="W"
+                            />
+                            <span className="text-[10px] text-muted-foreground">door w</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
