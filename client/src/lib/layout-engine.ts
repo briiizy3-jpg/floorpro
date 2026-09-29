@@ -94,26 +94,32 @@ function plankInCloset(
   return null;
 }
 
-// Check if a plank is near a doorway (within 1 foot)
+// Check if a plank touches the wall at a doorway opening
+// Only planks that actually reach the wall at the door position are marked
 function plankNearDoorway(
   px: number, py: number, pw: number, ph: number,
   roomWidth: number, roomLength: number,
   doorways: Doorway[]
 ): Doorway | null {
-  const threshold = 1.0; // 1 foot threshold
+  const tol = 0.02; // ~1/4 inch tolerance for touching the wall
   for (const d of doorways) {
+    // Check if plank overlaps the doorway's range along the wall
+    const overlapsDoor = (plankStart: number, plankEnd: number, doorStart: number, doorEnd: number) =>
+      plankEnd > doorStart + tol && plankStart < doorEnd - tol;
+
     switch (d.wall) {
-      case "north": // y ≈ 0
-        if (py < threshold && px + pw > d.offset && px < d.offset + d.width) return d;
+      case "north": // top wall (y ≈ 0)
+        // Only mark if plank touches the top wall
+        if (py < tol && overlapsDoor(px, px + pw, d.offset, d.offset + d.width)) return d;
         break;
-      case "south": // y ≈ roomLength
-        if (py + ph > roomLength - threshold && px + pw > d.offset && px < d.offset + d.width) return d;
+      case "south": // bottom wall (y ≈ roomLength)
+        if (py + ph > roomLength - tol && overlapsDoor(px, px + pw, d.offset, d.offset + d.width)) return d;
         break;
-      case "west": // x ≈ 0
-        if (px < threshold && py + ph > d.offset && py < d.offset + d.width) return d;
+      case "west": // left wall (x ≈ 0)
+        if (px < tol && overlapsDoor(py, py + ph, d.offset, d.offset + d.width)) return d;
         break;
-      case "east": // x ≈ roomWidth
-        if (px + pw > roomWidth - threshold && py + ph > d.offset && py < d.offset + d.width) return d;
+      case "east": // right wall (x ≈ roomWidth)
+        if (px + pw > roomWidth - tol && overlapsDoor(py, py + ph, d.offset, d.offset + d.width)) return d;
         break;
     }
   }
