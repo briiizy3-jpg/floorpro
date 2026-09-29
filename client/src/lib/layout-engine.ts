@@ -34,6 +34,7 @@ export interface LayoutParams {
   wasteFactor: number; // percentage (e.g. 10 = 10%)
   pricePerSqft: number; // $
   laborPerSqft: number; // $
+  staggerInches: number; // drop-back per row in inches (default 12)
 }
 
 const INCHES_PER_FOOT = 12;
@@ -48,6 +49,7 @@ export function calculateLayout(params: LayoutParams): LayoutResult {
     wasteFactor,
     pricePerSqft,
     laborPerSqft,
+    staggerInches = 12,
   } = params;
 
   const roomArea = roomWidth * roomLength;
@@ -59,13 +61,13 @@ export function calculateLayout(params: LayoutParams): LayoutResult {
 
   switch (pattern) {
     case "straight":
-      layoutStraight(planks, roomWidth, roomLength, matWFt, matLFt);
+      layoutStraight(planks, roomWidth, roomLength, matWFt, matLFt, staggerInches);
       break;
     case "diagonal":
-      layoutDiagonal(planks, roomWidth, roomLength, matWFt, matLFt);
+      layoutDiagonal(planks, roomWidth, roomLength, matWFt, matLFt, staggerInches);
       break;
     case "brick":
-      layoutBrick(planks, roomWidth, roomLength, matWFt, matLFt);
+      layoutBrick(planks, roomWidth, roomLength, matWFt, matLFt, staggerInches);
       break;
     case "herringbone":
       layoutHerringbone(planks, roomWidth, roomLength, matWFt, matLFt);
@@ -114,17 +116,18 @@ function layoutStraight(
   rw: number,
   rl: number,
   mw: number,
-  ml: number
+  ml: number,
+  staggerIn: number = 12
 ) {
+  const staggerFt = staggerIn / 12; // convert inches to feet
   let y = 0;
   let row = 0;
   while (y < rl) {
     const remainingHeight = rl - y;
     const plankH = Math.min(mw, remainingHeight);
-    let x = 0;
-    // Offset every other row for visual interest (subtle stagger)
-    const offset = row % 2 === 0 ? 0 : ml / 2;
-    x = -offset;
+    // Each row drops back by staggerInches (converted to feet)
+    const offset = (row * staggerFt) % ml; // wrap around plank length
+    let x = -offset;
     while (x < rw) {
       const remainingWidth = rw - x;
       let plankW = Math.min(ml, remainingWidth);
@@ -152,14 +155,16 @@ function layoutBrick(
   rw: number,
   rl: number,
   mw: number,
-  ml: number
+  ml: number,
+  staggerIn: number = 12
 ) {
+  const staggerFt = staggerIn / 12;
   let y = 0;
   let row = 0;
   while (y < rl) {
     const remainingHeight = rl - y;
     const plankH = Math.min(mw, remainingHeight);
-    const offset = row % 2 === 0 ? 0 : ml / 2;
+    const offset = (row * staggerFt) % ml;
     let x = -offset;
     while (x < rw) {
       const remainingWidth = rw - x;
@@ -188,7 +193,8 @@ function layoutDiagonal(
   rw: number,
   rl: number,
   mw: number,
-  ml: number
+  ml: number,
+  staggerIn: number = 12
 ) {
   // Diagonal at 45 degrees — use a larger bounding area
   const diag = Math.sqrt(rw * rw + rl * rl);
@@ -202,7 +208,7 @@ function layoutDiagonal(
   let row = 0;
   while (y < totalH) {
     const plankH = Math.min(mw, totalH - y);
-    const offset = row % 2 === 0 ? 0 : ml / 2;
+    const offset = (row * (staggerIn / 12)) % ml;
     let x = -offset;
     while (x < totalW) {
       const plankW = Math.min(ml, totalW - x);

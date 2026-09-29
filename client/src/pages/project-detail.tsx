@@ -163,6 +163,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
   const [laborPerSqft, setLaborPerSqft] = useState(room.laborPerSqft || 3.50);
   const [materialWidth, setMaterialWidth] = useState(room.materialWidth || 5);
   const [materialLength, setMaterialLength] = useState(room.materialLength || 48);
+  const [staggerInches, setStaggerInches] = useState(room.staggerInches || 12);
 
   const updateRoom = useMutation({
     mutationFn: async (data: any) => {
@@ -180,11 +181,11 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
   useEffect(() => {
     const timer = setTimeout(() => {
       updateRoom.mutate({
-        name, width, length, materialType, pattern, wasteFactor, pricePerSqft, laborPerSqft, materialWidth, materialLength,
+        name, width, length, materialType, pattern, wasteFactor, pricePerSqft, laborPerSqft, materialWidth, materialLength, staggerInches,
       });
     }, 800);
     return () => clearTimeout(timer);
-  }, [name, width, length, materialType, pattern, wasteFactor, pricePerSqft, laborPerSqft, materialWidth, materialLength]);
+  }, [name, width, length, materialType, pattern, wasteFactor, pricePerSqft, laborPerSqft, materialWidth, materialLength, staggerInches]);
 
   const layoutResult = useMemo(() => {
     return calculateLayout({
@@ -196,8 +197,9 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
       wasteFactor,
       pricePerSqft,
       laborPerSqft,
+      staggerInches,
     } as LayoutParams);
-  }, [width, length, materialWidth, materialLength, pattern, wasteFactor, pricePerSqft, laborPerSqft]);
+  }, [width, length, materialWidth, materialLength, pattern, wasteFactor, pricePerSqft, laborPerSqft, staggerInches]);
 
   const handlePatternChange = (newPattern: string) => {
     if (isFree && newPattern !== "straight") {
@@ -393,6 +395,17 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                   <Input type="number" step="0.01" value={laborPerSqft} onChange={(e) => setLaborPerSqft(parseFloat(e.target.value) || 0)} className="w-24 h-8 text-sm" data-testid={`input-labor-${room.id}`} />
                 </div>
               </div>
+            </div>
+
+            <Separator />
+            {/* Stagger / Drop-back */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stagger / Drop-back</Label>
+                <span className="text-sm font-semibold">{staggerInches}"</span>
+              </div>
+              <Slider value={[staggerInches]} min={0} max={36} step={1} onValueChange={(v) => setStaggerInches(v[0])} data-testid={`slider-stagger-${room.id}`} />
+              <p className="text-xs text-muted-foreground">How far each row drops back. 12" minimum recommended for planks.</p>
             </div>
 
             <Separator />

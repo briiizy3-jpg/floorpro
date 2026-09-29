@@ -29,8 +29,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // No localStorage in sandbox — start logged out
-    setIsLoading(false);
+    // Restore token from localStorage on page load
+    const savedToken = localStorage.getItem("floorpro_token");
+    if (savedToken) {
+      setToken(savedToken);
+      setAuthToken(savedToken);
+      // Fetch user data with restored token
+      fetch("/api/auth/me", {
+        headers: { Authorization: `Bearer ${savedToken}` },
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) {
+            setUser(data);
+          } else {
+            // Token expired — clear it
+            localStorage.removeItem("floorpro_token");
+            setToken(null);
+            setAuthToken(null);
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem("floorpro_token");
+          setToken(null);
+          setAuthToken(null);
+        })
+        .finally(() => setIsLoading(false));
+    } else {
+      setIsLoading(false);
+    }
   }, []);
 
   const login = async (username: string, password: string) => {
@@ -38,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     setToken(data.token);
     setAuthToken(data.token);
+    localStorage.setItem("floorpro_token", data.token);
     setUser(data.user);
   };
 
@@ -46,12 +74,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json();
     setToken(data.token);
     setAuthToken(data.token);
+    localStorage.setItem("floorpro_token", data.token);
     setUser(data.user);
   };
 
   const logout = () => {
     setToken(null);
     setAuthToken(null);
+    localStorage.removeItem("floorpro_token");
     setUser(null);
   };
 
