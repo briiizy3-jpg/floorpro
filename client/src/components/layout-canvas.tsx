@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback, type FC } from "react";
-import type { LayoutResult, PlankRect, Doorway, Closet, RoomShape, TrimType } from "@/lib/layout-engine";
-import { TRIM_INFO } from "@/lib/layout-engine";
+import type { LayoutResult, PlankRect, Doorway, Closet, RoomShape, TrimType, Obstacle } from "@/lib/layout-engine";
+import { TRIM_INFO, OBSTACLE_INFO } from "@/lib/layout-engine";
 
 interface LayoutCanvasProps {
   result: LayoutResult;
@@ -11,15 +11,22 @@ interface LayoutCanvasProps {
   roomShape?: RoomShape;
   doorways?: Doorway[];
   closets?: Closet[];
+  obstacles?: Obstacle[];
   onDoorwayMove?: (id: string, offset: number) => void;
   onClosetMove?: (id: string, x: number, y: number) => void;
   onClosetResize?: (id: string, w: number, h: number) => void;
+  onObstacleMove?: (id: string, x: number, y: number) => void;
+  onObstacleResize?: (id: string, w: number, h: number) => void;
+  onResizeRoom?: (width: number, length: number) => void;
 }
 
 type DragTarget =
   | { type: "doorway"; id: string; wall: string }
   | { type: "closet"; id: string }
   | { type: "closet-resize"; id: string }
+  | { type: "obstacle"; id: string }
+  | { type: "obstacle-resize"; id: string }
+  | { type: "wall"; wall: "east" | "south" }
   | null;
 
 const LayoutCanvas: FC<LayoutCanvasProps> = ({
@@ -31,9 +38,13 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
   roomShape = "rectangular",
   doorways = [],
   closets = [],
+  obstacles = [],
   onDoorwayMove,
   onClosetMove,
   onClosetResize,
+  onObstacleMove,
+  onObstacleResize,
+  onResizeRoom,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dragTarget, setDragTarget] = useState<DragTarget>(null);
@@ -91,7 +102,6 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
     (px: number, py: number): DragTarget | null => {
       const handleSize = 1.0; // feet
       for (const c of closets) {
-        // Check resize handle (bottom-right corner)
         if (
           px >= c.x + c.w - handleSize &&
           px <= c.x + c.w + handleSize &&
@@ -100,7 +110,6 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
         ) {
           return { type: "closet-resize", id: c.id };
         }
-        // Check body
         if (px >= c.x && px <= c.x + c.w && py >= c.y && py <= c.y + c.h) {
           return { type: "closet", id: c.id };
         }
@@ -110,19 +119,73 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
     [closets]
   );
 
+  // Check if a point is on an obstacle or its resize handle
+  const hitTestObstacle = useCallback(
+    (px: number, py: number): DragTarget | null => {
+      const handleSize = 1.0;
+      for (const o of obstacles) {
+        if (
+          px >= o.x + o.w - handleSize &&
+          px <= o.x + o.w + handleSize &&
+          py >= o.y + o.h - handleSize &&
+          py <= o.y + o.h + handleSize
+        ) {
+          return { type: "obstacle-resize", id: o.id };
+        }
+        if (px >= o.x && px <= o.x + o.w && py >= o.y && py <= o.y + o.h) {
+          return { type: "obstacle", id: o.id };
+        }
+      }
+      return null;
+    },
+    [obstacles]
+  );
+
+  // Check if a point is on a wall drag handle
+  const hitTestWall = useCallback(
+    (px: number, py: number): DragTarget | null => {
+      const threshold = 1.0; // feet
+      // East wall (right side) — resize width
+      if (Math.abs(px - roomWidth) < threshold && py > 1 && py < roomLength - 1) {
+        return { type: "wall", wall: "east" };
+      }
+      // South wall (bottom) — resize length
+      if (Math.abs(py - roomLength) < threshold && px > 1 && px < roomWidth - 1) {
+        return { type: "wall", wall: "south" };
+      }
+      return null;
+    },
+    [roomWidth, roomLength]
+  );
+
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
       const { x, y } = getRoomCoords(e.clientX, e.clientY);
-      // Check closets first (they're on top)
+      // Check obstacles first
+      const obstacleHit = hitTestObstacle(x, y);
+      if (obstacleHit) {
+        setDragTarget(obstacleHit);
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        return;
+      }
+      // Check closets
       const closetHit = hitTestCloset(x, y);
       if (closetHit) {
         setDragTarget(closetHit);
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
         return;
       }
+      // Check doorways
       const doorwayHit = hitTestDoorway(x, y);
       if (doorwayHit) {
         setDragTarget(doorwayHit);
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        return;
+      }
+      // Check walls (lowest priority)
+      const wallHit = hitTestWall(x, y);
+      if (wallHit) {
+        setDragTarget(wallHit);
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
       }
     },
@@ -135,10 +198,10 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
 
       // Update hover state
       if (!dragTarget) {
-        const hit = hitTestCloset(x, y) || hitTestDoorway(x, y);
+        const hit = hitTestObstacle(x, y) || hitTestCloset(x, y) || hitTestDoorway(x, y) || hitTestWall(x, y);
         const hitId = hit?.id || null;
         setHoverTarget((prev) => {
-          if (prev?.id === hitId) return prev;
+          if (prev?.id === hitId && prev?.type === hit?.type) return prev;
           return hit;
         });
         return;
@@ -147,7 +210,6 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       if (dragTarget.type === "doorway") {
         const doorway = doorways.find((d) => d.id === dragTarget.id);
         if (!doorway) return;
-        // Move along the wall
         let newOffset: number;
         if (doorway.wall === "north" || doorway.wall === "south") {
           newOffset = Math.max(0, Math.min(roomWidth - doorway.width, x - doorway.width / 2));
@@ -167,9 +229,27 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
         const newW = Math.max(2, Math.min(roomWidth - closet.x, x - closet.x));
         const newH = Math.max(2, Math.min(roomLength - closet.y, y - closet.y));
         onClosetResize?.(dragTarget.id, newW, newH);
+      } else if (dragTarget.type === "obstacle") {
+        const obstacle = obstacles.find((o) => o.id === dragTarget.id);
+        if (!obstacle) return;
+        const newX = Math.max(0, Math.min(roomWidth - obstacle.w, x - obstacle.w / 2));
+        const newY = Math.max(0, Math.min(roomLength - obstacle.h, y - obstacle.h / 2));
+        onObstacleMove?.(dragTarget.id, newX, newY);
+      } else if (dragTarget.type === "obstacle-resize") {
+        const obstacle = obstacles.find((o) => o.id === dragTarget.id);
+        if (!obstacle) return;
+        const newW = Math.max(1, Math.min(roomWidth - obstacle.x, x - obstacle.x));
+        const newH = Math.max(1, Math.min(roomLength - obstacle.y, y - obstacle.y));
+        onObstacleResize?.(dragTarget.id, newW, newH);
+      } else if (dragTarget.type === "wall") {
+        if (dragTarget.wall === "east") {
+          onResizeRoom?.(Math.max(2, Math.round(x * 10) / 10), roomLength);
+        } else if (dragTarget.wall === "south") {
+          onResizeRoom?.(roomWidth, Math.max(2, Math.round(y * 10) / 10));
+        }
       }
     },
-    [getRoomCoords, dragTarget, doorways, closets, roomWidth, roomLength, onDoorwayMove, onClosetMove, onClosetResize, hitTestCloset, hitTestDoorway]
+    [getRoomCoords, dragTarget, doorways, closets, obstacles, roomWidth, roomLength, onDoorwayMove, onClosetMove, onClosetResize, onObstacleMove, onObstacleResize, onResizeRoom, hitTestObstacle, hitTestCloset, hitTestDoorway, hitTestWall]
   );
 
   const handlePointerUp = useCallback(
@@ -313,6 +393,7 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       let color = plank.isCut ? "#7A6347" : colors[i % colors.length];
       if (plank.isClosetPlank) color = "#6B7E8C";
       if (plank.isDoorwayCut) color = "#C68642";
+      if (plank.isObstacleCut) color = "#A0522D";
       drawPlank(plank, color);
     });
 
@@ -375,9 +456,112 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
             break;
         }
         ctx.stroke();
+
+        // Closet door trim
+        if (c.trimType && c.trimType !== "none") {
+          const trimInfo = TRIM_INFO[c.trimType as TrimType];
+          ctx.strokeStyle = "#6B4F2A";
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          const inset = 3;
+          switch (c.doorWall) {
+            case "north":
+              ctx.moveTo(cx + c.doorOffset * scale, cy + inset);
+              ctx.lineTo(cx + (c.doorOffset + c.doorWidth) * scale, cy + inset);
+              break;
+            case "south":
+              ctx.moveTo(cx + c.doorOffset * scale, cy + ch - inset);
+              ctx.lineTo(cx + (c.doorOffset + c.doorWidth) * scale, cy + ch - inset);
+              break;
+            case "west":
+              ctx.moveTo(cx + inset, cy + c.doorOffset * scale);
+              ctx.lineTo(cx + inset, cy + (c.doorOffset + c.doorWidth) * scale);
+              break;
+            case "east":
+              ctx.moveTo(cx + cw - inset, cy + c.doorOffset * scale);
+              ctx.lineTo(cx + cw - inset, cy + (c.doorOffset + c.doorWidth) * scale);
+              break;
+          }
+          ctx.stroke();
+        }
       }
       ctx.restore();
     });
+
+    // Draw obstacles (counters, cabinets, islands, built-ins)
+    obstacles.forEach((o) => {
+      const ox = o.x * scale;
+      const oy = o.y * scale;
+      const ow = o.w * scale;
+      const oh = o.h * scale;
+      const info = OBSTACLE_INFO[o.type];
+      const isHovered = hoverTarget?.id === o.id && (hoverTarget.type === "obstacle" || hoverTarget.type === "obstacle-resize");
+      const isDragging = dragTarget?.id === o.id;
+
+      ctx.save();
+      // Fill with obstacle-type color
+      ctx.fillStyle = info.color + "33"; // semi-transparent
+      ctx.fillRect(ox, oy, ow, oh);
+
+      // Border
+      ctx.strokeStyle = isDragging ? "#000" : isHovered ? info.color : info.color + "aa";
+      ctx.lineWidth = isDragging ? 2.5 : isHovered ? 2 : 1.5;
+      ctx.setLineDash([]);
+      ctx.strokeRect(ox, oy, ow, oh);
+
+      // Cross-hatch pattern to indicate obstacle
+      ctx.strokeStyle = info.color + "22";
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i < ow + oh; i += 6) {
+        ctx.beginPath();
+        ctx.moveTo(ox + i, oy);
+        ctx.lineTo(ox + i - oh, oy + oh);
+        ctx.stroke();
+      }
+
+      // Label
+      ctx.fillStyle = info.color;
+      ctx.font = "600 9px Satoshi, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(o.label || info.label, ox + ow / 2, oy + oh / 2);
+
+      // Resize handle (bottom-right corner)
+      const handleR = 6;
+      ctx.fillStyle = isHovered && hoverTarget?.type === "obstacle-resize" ? info.color : info.color + "cc";
+      ctx.beginPath();
+      ctx.arc(ox + ow, oy + oh, handleR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // Draw wall drag handles (right and bottom edges)
+    if (onResizeRoom && roomShape !== "circular" && roomShape !== "octagonal") {
+      const handleSize = 8;
+      ctx.save();
+      // East wall handle
+      const eastHovered = hoverTarget?.type === "wall" && hoverTarget.wall === "east";
+      const eastDragging = dragTarget?.type === "wall" && dragTarget.wall === "east";
+      ctx.fillStyle = eastDragging ? "#6B4F2A" : eastHovered ? "#8B6F47" : "rgba(107, 79, 42, 0.4)";
+      ctx.fillRect(canvasW - handleSize / 2, canvasH / 3, handleSize, canvasH / 3);
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(canvasW - handleSize / 2, canvasH / 3, handleSize, canvasH / 3);
+
+      // South wall handle
+      const southHovered = hoverTarget?.type === "wall" && hoverTarget.wall === "south";
+      const southDragging = dragTarget?.type === "wall" && dragTarget.wall === "south";
+      ctx.fillStyle = southDragging ? "#6B4F2A" : southHovered ? "#8B6F47" : "rgba(107, 79, 42, 0.4)";
+      ctx.fillRect(canvasW / 3, canvasH - handleSize / 2, canvasW / 3, handleSize);
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(canvasW / 3, canvasH - handleSize / 2, canvasW / 3, handleSize);
+      ctx.restore();
+    }
 
     // Draw doorways
     doorways.forEach((d) => {
@@ -583,16 +767,20 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
         }
       }
     }
-  }, [result, roomWidth, roomLength, pattern, staggerInches, roomShape, doorways, closets, hoverTarget, dragTarget]);
+  }, [result, roomWidth, roomLength, pattern, staggerInches, roomShape, doorways, closets, obstacles, hoverTarget, dragTarget, onResizeRoom]);
 
   const cursor = dragTarget
-    ? dragTarget.type === "closet-resize"
+    ? dragTarget.type === "closet-resize" || dragTarget.type === "obstacle-resize"
       ? "nwse-resize"
-      : "grabbing"
+      : dragTarget.type === "wall"
+        ? dragTarget.wall === "east" ? "ew-resize" : "ns-resize"
+        : "grabbing"
     : hoverTarget
-      ? hoverTarget.type === "closet-resize"
+      ? hoverTarget.type === "closet-resize" || hoverTarget.type === "obstacle-resize"
         ? "nwse-resize"
-        : "grab"
+        : hoverTarget.type === "wall"
+          ? hoverTarget.wall === "east" ? "ew-resize" : "ns-resize"
+          : "grab"
       : "default";
 
   return (
@@ -623,9 +811,17 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
           <span className="w-3 h-1 rounded" style={{ background: "#6B4F2A" }}></span>
           Transition trim
         </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded" style={{ background: "#A0522D" }}></span>
+          Obstacle cut
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-3 rounded" style={{ background: "#8B6F47" }}></span>
+          Counter/cabinet
+        </span>
       </div>
       <p className="text-xs text-muted-foreground mt-1">
-        Drag doorways along walls · Drag closets to reposition · Drag blue corner to resize
+        Drag walls to resize · Drag doorways/closets/obstacles to move · Drag corners to resize
       </p>
     </div>
   );

@@ -3,7 +3,7 @@ import { Link, useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
-import { calculateLayout, MATERIAL_PRESETS, PATTERN_INFO, SHAPE_INFO, TRIM_INFO, type LayoutParams, type RoomShape, type Doorway, type Closet, type TrimType } from "@/lib/layout-engine";
+import { calculateLayout, MATERIAL_PRESETS, PATTERN_INFO, SHAPE_INFO, TRIM_INFO, OBSTACLE_INFO, type LayoutParams, type RoomShape, type Doorway, type Closet, type TrimType, type Obstacle, type ObstacleType } from "@/lib/layout-engine";
 import LayoutCanvas from "@/components/layout-canvas";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -167,8 +167,10 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
   const [roomShape, setRoomShape] = useState<RoomShape>(room.roomShape || "rectangular");
   const [doorways, setDoorways] = useState<Doorway[]>(room.doorways || []);
   const [closets, setClosets] = useState<Closet[]>(room.closets || []);
+  const [obstacles, setObstacles] = useState<Obstacle[]>(room.obstacles || []);
   const [showDoorwayDialog, setShowDoorwayDialog] = useState(false);
   const [showClosetDialog, setShowClosetDialog] = useState(false);
+  const [showObstacleDialog, setShowObstacleDialog] = useState(false);
 
   const updateRoom = useMutation({
     mutationFn: async (data: any) => {
@@ -186,11 +188,11 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
   useEffect(() => {
     const timer = setTimeout(() => {
       updateRoom.mutate({
-        name, width, length, materialType, pattern, wasteFactor, pricePerSqft, laborPerSqft, materialWidth, materialLength, staggerInches, roomShape, doorways, closets,
+        name, width, length, materialType, pattern, wasteFactor, pricePerSqft, laborPerSqft, materialWidth, materialLength, staggerInches, roomShape, doorways, closets, obstacles,
       });
     }, 800);
     return () => clearTimeout(timer);
-  }, [name, width, length, materialType, pattern, wasteFactor, pricePerSqft, laborPerSqft, materialWidth, materialLength, staggerInches, roomShape, doorways, closets]);
+  }, [name, width, length, materialType, pattern, wasteFactor, pricePerSqft, laborPerSqft, materialWidth, materialLength, staggerInches, roomShape, doorways, closets, obstacles]);
 
   const layoutResult = useMemo(() => {
     return calculateLayout({
@@ -206,8 +208,9 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
       roomShape,
       doorways,
       closets,
+      obstacles,
     } as LayoutParams);
-  }, [width, length, materialWidth, materialLength, pattern, wasteFactor, pricePerSqft, laborPerSqft, staggerInches, roomShape, doorways, closets]);
+  }, [width, length, materialWidth, materialLength, pattern, wasteFactor, pricePerSqft, laborPerSqft, staggerInches, roomShape, doorways, closets, obstacles]);
 
   const handlePatternChange = (newPattern: string) => {
     if (isFree && newPattern !== "straight") {
@@ -256,9 +259,13 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                 roomShape={roomShape}
                 doorways={doorways}
                 closets={closets}
+                obstacles={obstacles}
                 onDoorwayMove={(id, offset) => setDoorways(doorways.map((d) => d.id === id ? { ...d, offset: Math.round(offset * 10) / 10 } : d))}
                 onClosetMove={(id, x, y) => setClosets(closets.map((c) => c.id === id ? { ...c, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 } : c))}
                 onClosetResize={(id, w, h) => setClosets(closets.map((c) => c.id === id ? { ...c, w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 } : c))}
+                onObstacleMove={(id, x, y) => setObstacles(obstacles.map((o) => o.id === id ? { ...o, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 } : o))}
+                onObstacleResize={(id, w, h) => setObstacles(obstacles.map((o) => o.id === id ? { ...o, w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 } : o))}
+                onResizeRoom={(w, l) => { setWidth(w); setLength(l); }}
               />
             </div>
             {/* Stats bar */}
@@ -540,9 +547,113 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                               placeholder="W"
                             />
                             <span className="text-[10px] text-muted-foreground">door w</span>
+                            <select
+                              value={c.trimType || "none"}
+                              onChange={(e) => {
+                                const newTrim = e.target.value as TrimType;
+                                const price = TRIM_INFO[newTrim].defaultPrice;
+                                setClosets(closets.map((x) => x.id === c.id ? { ...x, trimType: newTrim, trimPricePerFt: price } : x));
+                              }}
+                              className="text-[10px] rounded border border-border bg-background px-1 py-0.5 h-5"
+                            >
+                              {Object.entries(TRIM_INFO).map(([key, info]) => (
+                                <option key={key} value={key}>{info.label}</option>
+                              ))}
+                            </select>
                           </>
                         )}
                       </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Obstacles */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Obstacles</Label>
+                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setShowObstacleDialog(true)}>+ Add Obstacle</Button>
+              </div>
+              {obstacles.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No obstacles. Add counters, cabinets, islands, or built-ins that planks need to cut around.</p>
+              ) : (
+                <div className="space-y-2">
+                  {obstacles.map((o) => (
+                    <div key={o.id} className="bg-muted/50 rounded px-2 py-2 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <input
+                          type="text"
+                          value={o.label}
+                          onChange={(e) => setObstacles(obstacles.map((x) => x.id === o.id ? { ...x, label: e.target.value } : x))}
+                          className="text-xs font-medium bg-transparent border-none outline-none flex-1 min-w-0"
+                          placeholder="Obstacle label"
+                        />
+                        <Button size="sm" variant="ghost" className="h-5 text-xs px-1 shrink-0" onClick={() => setObstacles(obstacles.filter((x) => x.id !== o.id))}>×</Button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">Type</Label>
+                          <select
+                            value={o.type}
+                            onChange={(e) => setObstacles(obstacles.map((x) => x.id === o.id ? { ...x, type: e.target.value as ObstacleType } : x))}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          >
+                            {Object.entries(OBSTACLE_INFO).map(([key, info]) => (
+                              <option key={key} value={key}>{info.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">X (ft)</Label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={o.x}
+                            onChange={(e) => setObstacles(obstacles.map((x) => x.id === o.id ? { ...x, x: parseFloat(e.target.value) || 0 } : x))}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">Y (ft)</Label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={o.y}
+                            onChange={(e) => setObstacles(obstacles.map((x) => x.id === o.id ? { ...x, y: parseFloat(e.target.value) || 0 } : x))}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">W (ft)</Label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="1"
+                            value={o.w}
+                            onChange={(e) => setObstacles(obstacles.map((x) => x.id === o.id ? { ...x, w: parseFloat(e.target.value) || 0 } : x))}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">H (ft)</Label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="1"
+                            value={o.h}
+                            onChange={(e) => setObstacles(obstacles.map((x) => x.id === o.id ? { ...x, h: parseFloat(e.target.value) || 0 } : x))}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          />
+                        </div>
+                      </div>
+                      {o.w > 0 && o.h > 0 && (
+                        <p className="text-[10px] text-muted-foreground">{OBSTACLE_INFO[o.type].label} · {o.w}'×{o.h}' = {(o.w * o.h).toFixed(1)} sq ft</p>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -702,6 +813,12 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
         onOpenChange={setShowClosetDialog}
         closets={closets}
         setClosets={setClosets}
+      />
+      <AddObstacleDialog
+        open={showObstacleDialog}
+        onOpenChange={setShowObstacleDialog}
+        obstacles={obstacles}
+        setObstacles={setObstacles}
       />
     </Card>
   );
@@ -970,6 +1087,82 @@ function AddClosetDialog({ open, onOpenChange, closets, setClosets }: {
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleAdd}>Add Closet</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Add Obstacle Dialog ───
+function AddObstacleDialog({ open, onOpenChange, obstacles, setObstacles }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  obstacles: Obstacle[];
+  setObstacles: (o: Obstacle[]) => void;
+}) {
+  const [label, setLabel] = useState("");
+  const [type, setType] = useState<ObstacleType>("counter");
+  const [x, setX] = useState(2);
+  const [y, setY] = useState(2);
+  const [w, setW] = useState(4);
+  const [h, setH] = useState(2);
+
+  const handleAdd = () => {
+    const id = `obstacle-${Date.now()}`;
+    const newObstacle: Obstacle = {
+      id, label: label || `${OBSTACLE_INFO[type].label} ${obstacles.length + 1}`, type, x, y, w, h,
+    };
+    setObstacles([...obstacles, newObstacle]);
+    setLabel("");
+    setX(2); setY(2); setW(4); setH(2);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Add Obstacle</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label>Label</Label>
+            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Kitchen Island, Counter" />
+          </div>
+          <div className="space-y-2">
+            <Label>Type</Label>
+            <Select value={type} onValueChange={(v) => setType(v as ObstacleType)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {Object.entries(OBSTACLE_INFO).map(([key, info]) => (
+                  <SelectItem key={key} value={key}>{info.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>X position (ft)</Label>
+              <Input type="number" step="0.5" value={x} onChange={(e) => setX(parseFloat(e.target.value) || 0)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Y position (ft)</Label>
+              <Input type="number" step="0.5" value={y} onChange={(e) => setY(parseFloat(e.target.value) || 0)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Width (ft)</Label>
+              <Input type="number" step="0.5" value={w} onChange={(e) => setW(parseFloat(e.target.value) || 0)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Height (ft)</Label>
+              <Input type="number" step="0.5" value={h} onChange={(e) => setH(parseFloat(e.target.value) || 0)} />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">Position is from the top-left corner. Planks overlapping obstacles are marked as cuts.</p>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={handleAdd}>Add Obstacle</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

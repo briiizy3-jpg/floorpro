@@ -12,6 +12,7 @@ export interface PlankRect {
   isFull: boolean;
   isDoorwayCut: boolean; // plank near a doorway needs special cut
   isClosetPlank: boolean; // plank inside a closet area
+  isObstacleCut: boolean; // plank overlaps an obstacle
 }
 
 export type TrimType = "none" | "t-mold" | "reducer" | "threshold" | "end-cap" | "stair-nose";
@@ -55,9 +56,32 @@ export interface Closet {
   doorWall: "north" | "south" | "east" | "west" | null;
   doorOffset: number; // feet from closet corner
   doorWidth: number; // feet
+  trimType: TrimType;
+  trimMaterial: string;
+  trimPricePerFt: number;
 }
 
 export type RoomShape = "rectangular" | "square" | "l-shaped" | "octagonal" | "circular";
+
+export type ObstacleType = "counter" | "cabinet" | "island" | "built-in" | "other";
+
+export interface Obstacle {
+  id: string;
+  x: number; // feet from left
+  y: number; // feet from top
+  w: number; // width in feet
+  h: number; // height in feet
+  label: string;
+  type: ObstacleType;
+}
+
+export const OBSTACLE_INFO: Record<ObstacleType, { label: string; color: string }> = {
+  counter: { label: "Counter", color: "#8B6F47" },
+  cabinet: { label: "Cabinet", color: "#7A5C3A" },
+  island: { label: "Island", color: "#6B4F2A" },
+  "built-in": { label: "Built-in", color: "#5A3E1F" },
+  other: { label: "Other", color: "#999" },
+};
 
 export interface LayoutResult {
   planks: PlankRect[];
@@ -71,6 +95,7 @@ export interface LayoutResult {
   materialArea: number; // sqft of material needed
   roomArea: number; // sqft
   closetArea: number; // sqft
+  obstacleArea: number; // sqft
   cost: number;
   laborCost: number;
   trimCost: number;
@@ -101,6 +126,7 @@ export interface LayoutParams {
   roomShape: RoomShape;
   doorways: Doorway[];
   closets: Closet[];
+  obstacles: Obstacle[];
 }
 
 const INCHES_PER_FOOT = 12;
@@ -145,6 +171,19 @@ function plankNearDoorway(
       case "east": // right wall (x ≈ roomWidth)
         if (px + pw > roomWidth - tol && overlapsDoor(py, py + ph, d.offset, d.offset + d.width)) return d;
         break;
+    }
+  }
+  return null;
+}
+
+// Check if a plank overlaps with an obstacle
+function plankOnObstacle(
+  px: number, py: number, pw: number, ph: number,
+  obstacles: Obstacle[]
+): Obstacle | null {
+  for (const o of obstacles) {
+    if (px < o.x + o.w && px + pw > o.x && py < o.y + o.h && py + ph > o.y) {
+      return o;
     }
   }
   return null;
@@ -217,6 +256,7 @@ export function calculateLayout(params: LayoutParams): LayoutResult {
     roomShape = "rectangular",
     doorways = [],
     closets = [],
+    obstacles = [],
   } = params;
 
   // Calculate effective room area based on shape
@@ -240,7 +280,13 @@ export function calculateLayout(params: LayoutParams): LayoutResult {
   for (const c of closets) {
     closetArea += c.w * c.h;
   }
-  roomArea -= closetArea;
+
+  // Obstacle area
+  let obstacleArea = 0;
+  for (const o of obstacles) {
+    obstacleArea += o.w * o.h;
+  }
+  roomArea -= closetArea + obstacleArea;
 
   const matWFt = materialWidth / INCHES_PER_FOOT;
   const matLFt = materialLength / INCHES_PER_FOOT;
@@ -267,13 +313,15 @@ export function calculateLayout(params: LayoutParams): LayoutResult {
       break;
   }
 
-  // Post-process: mark doorway and closet planks
+  // Post-process: mark doorway, closet, and obstacle planks
   let doorwayCuts = 0;
   let closetPlanks = 0;
+  let obstacleCuts = 0;
 
   planks.forEach((plank, i) => {
     const closet = plankInCloset(plank.x, plank.y, plank.w, plank.h, closets);
     const doorway = plankNearDoorway(plank.x, plank.y, plank.w, plank.h, roomWidth, roomLength, doorways);
+    const obstacle = plankOnObstacle(plank.x, plank.y, plank.w, plank.h, obstacles);
 
     if (closet) {
       plank.isClosetPlank = true;
@@ -283,7 +331,6 @@ export function calculateLayout(params: LayoutParams): LayoutResult {
       plank.isDoorwayCut = true;
       doorwayCuts++;
 
-      // Add to cut list
       const plankLenIn = plank.w * INCHES_PER_FOOT;
       cutList.push({
         plankIndex: i,
@@ -292,6 +339,21 @@ export function calculateLayout(params: LayoutParams): LayoutResult {
         cutLength: Math.round(plankLenIn * 10) / 10,
         location: `${doorway.wall} wall, ${doorway.offset.toFixed(1)}' from corner`,
         isDoorway: true,
+      });
+    }
+    if (obstacle) {
+      plank.isObstacleCut = true;
+      plank.isCut = true;
+      obstacleCuts++;
+
+      const plankLenIn = plank.w * INCHES_PER_FOOT;
+      cutList.push({
+        plankIndex: i,
+        description: `${obstacle.label} — cut around ${obstacle.type}`,
+        originalLength: Math.round(plankLenIn * 10) / 10,
+        cutLength: Math.round(plankLenIn * 10) / 10,
+        location: `(${obstacle.x.toFixed(1)}', ${obstacle.y.toFixed(1)}')`,
+        isDoorway: false,
       });
     }
   });
@@ -332,6 +394,22 @@ export function calculateLayout(params: LayoutParams): LayoutResult {
     }
   }
 
+  // Closet door trims
+  for (const c of closets) {
+    if (c.hasDoor && c.trimType && c.trimType !== "none") {
+      const trimLen = c.doorWidth;
+      const lineCost = trimLen * c.trimPricePerFt;
+      trimCost += lineCost;
+      trimList.push({
+        label: `${c.label} door`,
+        trimType: TRIM_INFO[c.trimType].label,
+        length: trimLen,
+        pricePerFt: c.trimPricePerFt,
+        total: Math.round(lineCost * 100) / 100,
+      });
+    }
+  }
+
   const totalCost = cost + laborCost + trimCost;
 
   return {
@@ -346,6 +424,7 @@ export function calculateLayout(params: LayoutParams): LayoutResult {
     materialArea: materialWithWaste,
     roomArea,
     closetArea,
+    obstacleArea,
     cost,
     laborCost,
     trimCost,
@@ -398,6 +477,7 @@ function layoutStraight(
           isFull: !isCut,
           isDoorwayCut: false,
           isClosetPlank: false,
+          isObstacleCut: false,
         });
       }
       x += ml;
@@ -449,6 +529,7 @@ function layoutBrick(
           isFull: !isCut,
           isDoorwayCut: false,
           isClosetPlank: false,
+          isObstacleCut: false,
         });
       }
       x += ml;
@@ -492,6 +573,7 @@ function layoutDiagonal(
           isFull: false,
           isDoorwayCut: false,
           isClosetPlank: false,
+          isObstacleCut: false,
         });
       }
       x += ml;
@@ -528,6 +610,7 @@ function layoutHerringbone(
         isFull: false,
         isDoorwayCut: false,
         isClosetPlank: false,
+          isObstacleCut: false,
       });
       planks.push({
         x: x + unitW - unitH,
@@ -539,6 +622,7 @@ function layoutHerringbone(
         isFull: false,
         isDoorwayCut: false,
         isClosetPlank: false,
+          isObstacleCut: false,
       });
       x += vWidth;
     }
@@ -572,6 +656,7 @@ function layoutChevron(
         isFull: false,
         isDoorwayCut: false,
         isClosetPlank: false,
+          isObstacleCut: false,
       });
       x += ml;
       col++;
@@ -588,6 +673,7 @@ function layoutChevron(
         isFull: false,
         isDoorwayCut: false,
         isClosetPlank: false,
+          isObstacleCut: false,
       });
       x += ml;
     }
