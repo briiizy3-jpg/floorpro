@@ -525,7 +525,55 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       ctx.font = "600 9px Satoshi, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(o.label || info.label, ox + ow / 2, oy + oh / 2);
+      ctx.fillText(o.label || info.label, ox + ow / 2, oy + oh / 2 - 6);
+
+      // Dimension labels (width on bottom edge, height on right edge)
+      ctx.font = "500 8px Satoshi, sans-serif";
+      ctx.fillStyle = info.color;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      // Width label (bottom edge, centered)
+      const wLabel = `${o.w}'`;
+      const wMetrics = ctx.measureText(wLabel);
+      const wLabelW = wMetrics.width + 6;
+      const wLabelH = 10;
+      const wLabelX = ox + ow / 2;
+      const wLabelY = oy + oh + 7;
+      ctx.fillStyle = "hsl(var(--background))";
+      ctx.fillRect(wLabelX - wLabelW / 2, wLabelY - wLabelH / 2, wLabelW, wLabelH);
+      ctx.fillStyle = info.color;
+      ctx.fillText(wLabel, wLabelX, wLabelY);
+
+      // Height label (right edge, centered, rotated)
+      const hLabel = `${o.h}'`;
+      ctx.save();
+      ctx.translate(ox + ow + 7, oy + oh / 2);
+      ctx.rotate(Math.PI / 2);
+      const hMetrics = ctx.measureText(hLabel);
+      const hLabelW = hMetrics.width + 6;
+      const hLabelH = 10;
+      ctx.fillStyle = "hsl(var(--background))";
+      ctx.fillRect(-hLabelW / 2, -hLabelH / 2, hLabelW, hLabelH);
+      ctx.fillStyle = info.color;
+      ctx.fillText(hLabel, 0, 0);
+      ctx.restore();
+
+      // Dimension lines (thin arrows showing extent)
+      ctx.strokeStyle = info.color + "66";
+      ctx.lineWidth = 0.5;
+      ctx.setLineDash([2, 2]);
+      // Width line (below obstacle)
+      ctx.beginPath();
+      ctx.moveTo(ox, oy + oh + 2);
+      ctx.lineTo(ox + ow, oy + oh + 2);
+      ctx.stroke();
+      // Height line (right of obstacle)
+      ctx.beginPath();
+      ctx.moveTo(ox + ow + 2, oy);
+      ctx.lineTo(ox + ow + 2, oy + oh);
+      ctx.stroke();
+      ctx.setLineDash([]);
 
       // Resize handle (bottom-right corner)
       const handleR = 6;
