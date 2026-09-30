@@ -3,7 +3,7 @@ import { Link, useParams, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
-import { calculateLayout, MATERIAL_PRESETS, PATTERN_INFO, SHAPE_INFO, type LayoutParams, type RoomShape, type Doorway, type Closet } from "@/lib/layout-engine";
+import { calculateLayout, MATERIAL_PRESETS, PATTERN_INFO, SHAPE_INFO, TRIM_INFO, type LayoutParams, type RoomShape, type Doorway, type Closet, type TrimType } from "@/lib/layout-engine";
 import LayoutCanvas from "@/components/layout-canvas";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -266,7 +266,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
               <StatCard icon={Layers} label="Total Pieces" value={layoutResult.totalPlanks.toString()} sub={`${layoutResult.fullPlanks} full, ${layoutResult.cutPlanks} cut`} />
               <StatCard icon={Scissors} label="Material Needed" value={`${layoutResult.materialNeeded} boxes`} sub={`${layoutResult.materialArea.toFixed(0)} sq ft`} />
               <StatCard icon={Ruler} label="Room Area" value={`${layoutResult.roomArea.toFixed(0)} sq ft`} sub={layoutResult.doorwayCuts > 0 ? `${layoutResult.doorwayCuts} doorway cuts` : `Waste: ${layoutResult.wastePercentage.toFixed(1)}%`} />
-              <StatCard icon={DollarSign} label="Total Cost" value={`$${layoutResult.totalCost.toFixed(0)}`} sub={`$${layoutResult.cost.toFixed(0)} mat + $${layoutResult.laborCost.toFixed(0)} labor`} />
+              <StatCard icon={DollarSign} label="Total Cost" value={`$${layoutResult.totalCost.toFixed(0)}`} sub={`$${layoutResult.cost.toFixed(0)} mat + $${layoutResult.laborCost.toFixed(0)} labor${layoutResult.trimCost > 0 ? ` + $${layoutResult.trimCost.toFixed(0)} trim` : ""}`} />
             </div>
           </div>
 
@@ -380,6 +380,49 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                           />
                         </div>
                       </div>
+                      {/* Transition Trim */}
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">Trim</Label>
+                          <select
+                            value={d.trimType || "none"}
+                            onChange={(e) => {
+                              const newTrim = e.target.value as TrimType;
+                              const price = TRIM_INFO[newTrim].defaultPrice;
+                              setDoorways(doorways.map((x) => x.id === d.id ? { ...x, trimType: newTrim, trimPricePerFt: price } : x));
+                            }}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          >
+                            {Object.entries(TRIM_INFO).map(([key, info]) => (
+                              <option key={key} value={key}>{info.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">Trim Material</Label>
+                          <input
+                            type="text"
+                            value={d.trimMaterial || ""}
+                            onChange={(e) => setDoorways(doorways.map((x) => x.id === d.id ? { ...x, trimMaterial: e.target.value } : x))}
+                            placeholder="Matching"
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          />
+                        </div>
+                        <div className="space-y-0.5">
+                          <Label className="text-[10px] text-muted-foreground">$/ft</Label>
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={d.trimPricePerFt || 0}
+                            onChange={(e) => setDoorways(doorways.map((x) => x.id === d.id ? { ...x, trimPricePerFt: parseFloat(e.target.value) || 0 } : x))}
+                            className="text-xs w-full rounded border border-border bg-background px-1.5 py-1 h-7"
+                          />
+                        </div>
+                      </div>
+                      {d.trimType && d.trimType !== "none" && (
+                        <p className="text-[10px] text-muted-foreground">{TRIM_INFO[d.trimType as TrimType]?.description} · {d.width}' × ${d.trimPricePerFt}/ft = ${(d.width * d.trimPricePerFt).toFixed(2)}</p>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback, type FC } from "react";
-import type { LayoutResult, PlankRect, Doorway, Closet, RoomShape } from "@/lib/layout-engine";
+import type { LayoutResult, PlankRect, Doorway, Closet, RoomShape, TrimType } from "@/lib/layout-engine";
+import { TRIM_INFO } from "@/lib/layout-engine";
 
 interface LayoutCanvasProps {
   result: LayoutResult;
@@ -458,6 +459,63 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       const labelX = d.wall === "west" ? -12 : d.wall === "east" ? canvasW + 12 : doorOff + doorW / 2;
       const labelY = d.wall === "north" ? -8 : d.wall === "south" ? canvasH + 8 : doorOff + doorW / 2;
       ctx.fillText(d.label || "Door", labelX, labelY);
+
+      // Draw transition trim if set
+      if (d.trimType && d.trimType !== "none") {
+        const trimInfo = TRIM_INFO[d.trimType as TrimType];
+        const trimColor = "#6B4F2A"; // dark brown for trim
+        const trimThick = 3;
+
+        ctx.strokeStyle = trimColor;
+        ctx.lineWidth = trimThick;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        // Draw trim just inside the wall, parallel to the doorway
+        const inset = 3; // pixels inside the room
+        switch (d.wall) {
+          case "north":
+            ctx.moveTo(doorOff, inset);
+            ctx.lineTo(doorOff + doorW, inset);
+            break;
+          case "south":
+            ctx.moveTo(doorOff, canvasH - inset);
+            ctx.lineTo(doorOff + doorW, canvasH - inset);
+            break;
+          case "west":
+            ctx.moveTo(inset, doorOff);
+            ctx.lineTo(inset, doorOff + doorW);
+            break;
+          case "east":
+            ctx.moveTo(canvasW - inset, doorOff);
+            ctx.lineTo(canvasW - inset, doorOff + doorW);
+            break;
+        }
+        ctx.stroke();
+
+        // Trim label
+        ctx.fillStyle = trimColor;
+        ctx.font = "500 8px Satoshi, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        let tLx = 0, tLy = 0;
+        switch (d.wall) {
+          case "north": tLx = doorOff + doorW / 2; tLy = inset + 8; break;
+          case "south": tLx = doorOff + doorW / 2; tLy = canvasH - inset - 8; break;
+          case "west": tLx = inset + 8; tLy = doorOff + doorW / 2; break;
+          case "east": tLx = canvasW - inset - 8; tLy = doorOff + doorW / 2; break;
+        }
+        // Small background for readability
+        const tText = trimInfo.label;
+        ctx.font = "500 8px Satoshi, sans-serif";
+        const tMetrics = ctx.measureText(tText);
+        const tW = tMetrics.width + 6;
+        const tH = 10;
+        ctx.fillStyle = "hsl(var(--background))";
+        ctx.fillRect(tLx - tW / 2, tLy - tH / 2, tW, tH);
+        ctx.fillStyle = trimColor;
+        ctx.fillText(tText, tLx, tLy);
+      }
+
       ctx.restore();
     });
 
@@ -560,6 +618,10 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
         <span className="flex items-center gap-1">
           <span className="w-3 h-3 rounded" style={{ background: "#7A6347" }}></span>
           Cut plank
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-3 h-1 rounded" style={{ background: "#6B4F2A" }}></span>
+          Transition trim
         </span>
       </div>
       <p className="text-xs text-muted-foreground mt-1">

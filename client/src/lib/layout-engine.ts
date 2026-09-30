@@ -14,12 +14,34 @@ export interface PlankRect {
   isClosetPlank: boolean; // plank inside a closet area
 }
 
+export type TrimType = "none" | "t-mold" | "reducer" | "threshold" | "end-cap" | "stair-nose";
+
+export interface TransitionTrim {
+  doorwayId: string;
+  trimType: TrimType;
+  length: number; // feet (usually = doorway width)
+  material: string; // e.g. "Matching Wood", "Metal", "Vinyl"
+  pricePerFt: number; // $ per linear foot
+}
+
+export const TRIM_INFO: Record<TrimType, { label: string; description: string; defaultPrice: number }> = {
+  none: { label: "None", description: "No transition trim", defaultPrice: 0 },
+  "t-mold": { label: "T-Molding", description: "For floors of equal height", defaultPrice: 8 },
+  reducer: { label: "Reducer Strip", description: "For floors of different heights", defaultPrice: 10 },
+  threshold: { label: "Threshold / Saddle", description: "Standard door threshold", defaultPrice: 12 },
+  "end-cap": { label: "End Cap", description: "Finishing edge against carpet/door", defaultPrice: 9 },
+  "stair-nose": { label: "Stair Nose", description: "For step edges", defaultPrice: 15 },
+};
+
 export interface Doorway {
   id: string;
   wall: "north" | "south" | "east" | "west";
   offset: number; // feet from corner
   width: number; // feet
   label: string;
+  trimType: TrimType;
+  trimMaterial: string;
+  trimPricePerFt: number;
 }
 
 export interface Closet {
@@ -51,8 +73,10 @@ export interface LayoutResult {
   closetArea: number; // sqft
   cost: number;
   laborCost: number;
+  trimCost: number;
   totalCost: number;
   cutList: CutItem[];
+  trimList: { label: string; trimType: string; length: number; pricePerFt: number; total: number }[];
 }
 
 export interface CutItem {
@@ -289,7 +313,26 @@ export function calculateLayout(params: LayoutParams): LayoutResult {
 
   const cost = materialWithWaste * pricePerSqft;
   const laborCost = roomArea * laborPerSqft;
-  const totalCost = cost + laborCost;
+
+  // Trim costs — calculate transition trims for each doorway
+  const trimList: { label: string; trimType: string; length: number; pricePerFt: number; total: number }[] = [];
+  let trimCost = 0;
+  for (const d of doorways) {
+    if (d.trimType && d.trimType !== "none") {
+      const trimLen = d.width; // trim length = doorway width
+      const lineCost = trimLen * d.trimPricePerFt;
+      trimCost += lineCost;
+      trimList.push({
+        label: d.label,
+        trimType: TRIM_INFO[d.trimType].label,
+        length: trimLen,
+        pricePerFt: d.trimPricePerFt,
+        total: Math.round(lineCost * 100) / 100,
+      });
+    }
+  }
+
+  const totalCost = cost + laborCost + trimCost;
 
   return {
     planks,
@@ -305,8 +348,10 @@ export function calculateLayout(params: LayoutParams): LayoutResult {
     closetArea,
     cost,
     laborCost,
+    trimCost,
     totalCost,
     cutList,
+    trimList,
   };
 }
 
