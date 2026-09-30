@@ -420,7 +420,52 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       ctx.font = "600 10px Satoshi, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(c.label || "Closet", cx + cw / 2, cy + ch / 2);
+      ctx.fillText(c.label || "Closet", cx + cw / 2, cy + ch / 2 - 6);
+
+      // Dimension labels (width on bottom, height on right)
+      ctx.font = "500 8px Satoshi, sans-serif";
+      const cwInches = Math.round(c.w * 12);
+      const chInches = Math.round(c.h * 12);
+
+      // Width label
+      const cwLabel = `${c.w}' (${cwInches}")`;
+      const cwMetrics = ctx.measureText(cwLabel);
+      const cwLabelW = cwMetrics.width + 6;
+      const cwLabelH = 10;
+      const cwLabelX = cx + cw / 2;
+      const cwLabelY = cy + ch + 7;
+      ctx.fillStyle = "hsl(var(--background))";
+      ctx.fillRect(cwLabelX - cwLabelW / 2, cwLabelY - cwLabelH / 2, cwLabelW, cwLabelH);
+      ctx.fillStyle = "#2563EB";
+      ctx.fillText(cwLabel, cwLabelX, cwLabelY);
+
+      // Height label (rotated)
+      const chLabel = `${c.h}' (${chInches}")`;
+      ctx.save();
+      ctx.translate(cx + cw + 7, cy + ch / 2);
+      ctx.rotate(Math.PI / 2);
+      const chMetrics = ctx.measureText(chLabel);
+      const chLabelW = chMetrics.width + 6;
+      const chLabelH = 10;
+      ctx.fillStyle = "hsl(var(--background))";
+      ctx.fillRect(-chLabelW / 2, -chLabelH / 2, chLabelW, chLabelH);
+      ctx.fillStyle = "#2563EB";
+      ctx.fillText(chLabel, 0, 0);
+      ctx.restore();
+
+      // Dimension lines
+      ctx.strokeStyle = "#2563EB66";
+      ctx.lineWidth = 0.5;
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + ch + 2);
+      ctx.lineTo(cx + cw, cy + ch + 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx + cw + 2, cy);
+      ctx.lineTo(cx + cw + 2, cy + ch);
+      ctx.stroke();
+      ctx.setLineDash([]);
 
       // Resize handle (bottom-right corner)
       const handleR = 6;
@@ -692,7 +737,7 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       ctx.textBaseline = "middle";
       const labelX = d.wall === "west" ? -12 : d.wall === "east" ? canvasW + 12 : doorOff + doorW / 2;
       const labelY = d.wall === "north" ? -8 : d.wall === "south" ? canvasH + 8 : doorOff + doorW / 2;
-      ctx.fillText(d.label || "Door", labelX, labelY);
+      ctx.fillText(`${d.label || "Door"} (${d.width}' / ${Math.round(d.width * 12)}")`, labelX, labelY);
 
       // Draw transition trim if set
       if (d.trimType && d.trimType !== "none") {
@@ -739,7 +784,7 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
           case "east": tLx = canvasW - inset - 8; tLy = doorOff + doorW / 2; break;
         }
         // Small background for readability
-        const tText = trimInfo.label;
+        const tText = `${trimInfo.label} (${d.width}' / ${Math.round(d.width * 12)}")`;
         ctx.font = "500 8px Satoshi, sans-serif";
         const tMetrics = ctx.measureText(tText);
         const tW = tMetrics.width + 6;
@@ -758,11 +803,11 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
     ctx.font = "600 12px Satoshi, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`${roomWidth}'`, canvasW / 2, canvasH + 16);
+    ctx.fillText(`${roomWidth}' (${Math.round(roomWidth * 12)}")`, canvasW / 2, canvasH + 16);
     ctx.save();
     ctx.translate(-16, canvasH / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText(`${roomLength}'`, 0, 0);
+    ctx.fillText(`${roomLength}' (${Math.round(roomLength * 12)}")`, 0, 0);
     ctx.restore();
 
     // Stagger indicator
@@ -797,7 +842,7 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
           ctx.lineTo(hx2 - 4, arrowY + 3);
           ctx.stroke();
 
-          const labelText = `${staggerInches}" stagger`;
+          const labelText = `${staggerInches}" (${(staggerInches / 12).toFixed(1)}') stagger`;
           ctx.font = "600 10px Satoshi, sans-serif";
           const metrics = ctx.measureText(labelText);
           const labelW = metrics.width + 8;

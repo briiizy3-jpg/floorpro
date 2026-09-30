@@ -285,6 +285,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor={`width-${room.id}`} className="text-xs">Width (ft)</Label>
+                  <p className="text-[10px] text-muted-foreground">{Math.round(width * 12)}"</p>
                   <Input
                     id={`width-${room.id}`}
                     type="number"
@@ -296,6 +297,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor={`length-${room.id}`} className="text-xs">Length (ft)</Label>
+                  <p className="text-[10px] text-muted-foreground">{Math.round(length * 12)}"</p>
                   <Input
                     id={`length-${room.id}`}
                     type="number"
@@ -366,6 +368,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                         </div>
                         <div className="space-y-0.5">
                           <Label className="text-[10px] text-muted-foreground">Offset (ft)</Label>
+                          <p className="text-[10px] text-muted-foreground">{Math.round(d.offset * 12)}"</p>
                           <input
                             type="number"
                             step="0.5"
@@ -377,6 +380,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                         </div>
                         <div className="space-y-0.5">
                           <Label className="text-[10px] text-muted-foreground">Width (ft)</Label>
+                          <p className="text-[10px] text-muted-foreground">{Math.round(d.width * 12)}"</p>
                           <input
                             type="number"
                             step="0.5"
@@ -428,7 +432,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                         </div>
                       </div>
                       {d.trimType && d.trimType !== "none" && (
-                        <p className="text-[10px] text-muted-foreground">{TRIM_INFO[d.trimType as TrimType]?.description} · {d.width}' × ${d.trimPricePerFt}/ft = ${(d.width * d.trimPricePerFt).toFixed(2)}</p>
+                        <p className="text-[10px] text-muted-foreground">{TRIM_INFO[d.trimType as TrimType]?.description} · {d.width}' ({Math.round(d.width * 12)}") × ${d.trimPricePerFt}/ft = ${(d.width * d.trimPricePerFt).toFixed(2)}</p>
                       )}
                     </div>
                   ))}
@@ -463,6 +467,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                       <div className="grid grid-cols-4 gap-1.5">
                         <div className="space-y-0.5">
                           <Label className="text-[10px] text-muted-foreground">X (ft)</Label>
+                          <p className="text-[9px] text-muted-foreground">{Math.round(c.x * 12)}"</p>
                           <input
                             type="number"
                             step="0.5"
@@ -474,6 +479,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                         </div>
                         <div className="space-y-0.5">
                           <Label className="text-[10px] text-muted-foreground">Y (ft)</Label>
+                          <p className="text-[9px] text-muted-foreground">{Math.round(c.y * 12)}"</p>
                           <input
                             type="number"
                             step="0.5"
@@ -485,6 +491,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                         </div>
                         <div className="space-y-0.5">
                           <Label className="text-[10px] text-muted-foreground">W (ft)</Label>
+                          <p className="text-[9px] text-muted-foreground">{Math.round(c.w * 12)}"</p>
                           <input
                             type="number"
                             step="0.5"
@@ -496,6 +503,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                         </div>
                         <div className="space-y-0.5">
                           <Label className="text-[10px] text-muted-foreground">H (ft)</Label>
+                          <p className="text-[9px] text-muted-foreground">{Math.round(c.h * 12)}"</p>
                           <input
                             type="number"
                             step="0.5"
@@ -608,6 +616,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                         </div>
                         <div className="space-y-0.5">
                           <Label className="text-[10px] text-muted-foreground">X (ft)</Label>
+                          <p className="text-[9px] text-muted-foreground">{Math.round(o.x * 12)}"</p>
                           <input
                             type="number"
                             step="0.5"
@@ -619,6 +628,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                         </div>
                         <div className="space-y-0.5">
                           <Label className="text-[10px] text-muted-foreground">Y (ft)</Label>
+                          <p className="text-[9px] text-muted-foreground">{Math.round(o.y * 12)}"</p>
                           <input
                             type="number"
                             step="0.5"
@@ -630,6 +640,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                         </div>
                         <div className="space-y-0.5">
                           <Label className="text-[10px] text-muted-foreground">W (ft)</Label>
+                          <p className="text-[9px] text-muted-foreground">{Math.round(o.w * 12)}"</p>
                           <input
                             type="number"
                             step="0.5"
@@ -641,6 +652,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                         </div>
                         <div className="space-y-0.5">
                           <Label className="text-[10px] text-muted-foreground">H (ft)</Label>
+                          <p className="text-[9px] text-muted-foreground">{Math.round(o.h * 12)}"</p>
                           <input
                             type="number"
                             step="0.5"
@@ -714,10 +726,12 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Width (in)</Label>
+                  <p className="text-[10px] text-muted-foreground">{(materialWidth / 12).toFixed(2)}' / {materialWidth}"</p>
                   <Input type="number" step="0.5" value={materialWidth} onChange={(e) => setMaterialWidth(parseFloat(e.target.value) || 0)} data-testid={`input-mat-width-${room.id}`} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Length (in)</Label>
+                  <p className="text-[10px] text-muted-foreground">{(materialLength / 12).toFixed(2)}' / {materialLength}"</p>
                   <Input type="number" step="0.5" value={materialLength} onChange={(e) => setMaterialLength(parseFloat(e.target.value) || 0)} data-testid={`input-mat-length-${room.id}`} />
                 </div>
               </div>
