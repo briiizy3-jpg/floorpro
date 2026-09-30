@@ -533,8 +533,9 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      // Width label (bottom edge, centered)
-      const wLabel = `${o.w}'`;
+      // Width label (bottom edge, centered) — feet + inches
+      const wInches = Math.round(o.w * 12);
+      const wLabel = `${o.w}' (${wInches}")`;
       const wMetrics = ctx.measureText(wLabel);
       const wLabelW = wMetrics.width + 6;
       const wLabelH = 10;
@@ -545,8 +546,9 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       ctx.fillStyle = info.color;
       ctx.fillText(wLabel, wLabelX, wLabelY);
 
-      // Height label (right edge, centered, rotated)
-      const hLabel = `${o.h}'`;
+      // Height label (right edge, centered, rotated) — feet + inches
+      const hInches = Math.round(o.h * 12);
+      const hLabel = `${o.h}' (${hInches}")`;
       ctx.save();
       ctx.translate(ox + ow + 7, oy + oh / 2);
       ctx.rotate(Math.PI / 2);

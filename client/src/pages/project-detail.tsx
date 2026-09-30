@@ -652,7 +652,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                         </div>
                       </div>
                       {o.w > 0 && o.h > 0 && (
-                        <p className="text-[10px] text-muted-foreground">{OBSTACLE_INFO[o.type].label} · {o.w}'×{o.h}' = {(o.w * o.h).toFixed(1)} sq ft</p>
+                        <p className="text-[10px] text-muted-foreground">{OBSTACLE_INFO[o.type].label} · {o.w}'×{o.h}' = {Math.round(o.w * 12)}"×{Math.round(o.h * 12)}" = {(o.w * o.h).toFixed(1)} sq ft</p>
                       )}
                     </div>
                   ))}
