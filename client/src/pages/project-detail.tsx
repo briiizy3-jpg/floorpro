@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { calculateLayout, MATERIAL_PRESETS, PATTERN_INFO, SHAPE_INFO, TRIM_INFO, OBSTACLE_INFO, type LayoutParams, type RoomShape, type Doorway, type Closet, type TrimType, type Obstacle, type ObstacleType } from "@/lib/layout-engine";
+import { fmtDim, fmtDimBoth, type DisplayUnit } from "@/lib/units";
 import LayoutCanvas from "@/components/layout-canvas";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -171,6 +172,9 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
   const [showDoorwayDialog, setShowDoorwayDialog] = useState(false);
   const [showClosetDialog, setShowClosetDialog] = useState(false);
   const [showObstacleDialog, setShowObstacleDialog] = useState(false);
+  const [unit, setUnit] = useState<DisplayUnit>(() => (localStorage.getItem("floorpro_unit") as DisplayUnit) || "ft");
+
+  useEffect(() => { localStorage.setItem("floorpro_unit", unit); }, [unit]);
 
   const updateRoom = useMutation({
     mutationFn: async (data: any) => {
@@ -249,6 +253,19 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Canvas - spans 2 columns */}
           <div className="lg:col-span-2">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Layout Preview</span>
+              <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
+                <button
+                  onClick={() => setUnit("ft")}
+                  className={`text-xs px-2.5 py-1 rounded-md transition-colors ${unit === "ft" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >Feet</button>
+                <button
+                  onClick={() => setUnit("in")}
+                  className={`text-xs px-2.5 py-1 rounded-md transition-colors ${unit === "in" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >Inches</button>
+              </div>
+            </div>
             <div className="rounded-lg border border-border bg-muted/30 p-2">
               <LayoutCanvas
                 result={layoutResult}
@@ -260,6 +277,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                 doorways={doorways}
                 closets={closets}
                 obstacles={obstacles}
+                unit={unit}
                 onDoorwayMove={(id, offset) => setDoorways(doorways.map((d) => d.id === id ? { ...d, offset: Math.round(offset * 10) / 10 } : d))}
                 onClosetMove={(id, x, y) => setClosets(closets.map((c) => c.id === id ? { ...c, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 } : c))}
                 onClosetResize={(id, w, h) => setClosets(closets.map((c) => c.id === id ? { ...c, w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 } : c))}
@@ -284,8 +302,8 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
               <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Room Dimensions</Label>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label htmlFor={`width-${room.id}`} className="text-xs">Width (ft)</Label>
-                  <p className="text-[10px] text-muted-foreground">{Math.round(width * 12)}"</p>
+                  <Label htmlFor={`width-${room.id}`} className="text-xs">Width ({unit === "ft" ? "ft" : "in"})</Label>
+                  <p className="text-[10px] text-muted-foreground">{fmtDimBoth(width, unit)}</p>
                   <Input
                     id={`width-${room.id}`}
                     type="number"
@@ -296,8 +314,8 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor={`length-${room.id}`} className="text-xs">Length (ft)</Label>
-                  <p className="text-[10px] text-muted-foreground">{Math.round(length * 12)}"</p>
+                  <Label htmlFor={`length-${room.id}`} className="text-xs">Length ({unit === "ft" ? "ft" : "in"})</Label>
+                  <p className="text-[10px] text-muted-foreground">{fmtDimBoth(length, unit)}</p>
                   <Input
                     id={`length-${room.id}`}
                     type="number"
@@ -367,8 +385,8 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                           </select>
                         </div>
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-muted-foreground">Offset (ft)</Label>
-                          <p className="text-[10px] text-muted-foreground">{Math.round(d.offset * 12)}"</p>
+                          <Label className="text-[10px] text-muted-foreground">Offset ({unit === "ft" ? "ft" : "in"})</Label>
+                          <p className="text-[10px] text-muted-foreground">{fmtDimBoth(d.offset, unit)}</p>
                           <input
                             type="number"
                             step="0.5"
@@ -379,8 +397,8 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                           />
                         </div>
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-muted-foreground">Width (ft)</Label>
-                          <p className="text-[10px] text-muted-foreground">{Math.round(d.width * 12)}"</p>
+                          <Label className="text-[10px] text-muted-foreground">Width ({unit === "ft" ? "ft" : "in"})</Label>
+                          <p className="text-[10px] text-muted-foreground">{fmtDimBoth(d.width, unit)}</p>
                           <input
                             type="number"
                             step="0.5"
@@ -432,7 +450,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                         </div>
                       </div>
                       {d.trimType && d.trimType !== "none" && (
-                        <p className="text-[10px] text-muted-foreground">{TRIM_INFO[d.trimType as TrimType]?.description} · {d.width}' ({Math.round(d.width * 12)}") × ${d.trimPricePerFt}/ft = ${(d.width * d.trimPricePerFt).toFixed(2)}</p>
+                        <p className="text-[10px] text-muted-foreground">{TRIM_INFO[d.trimType as TrimType]?.description} · {fmtDimBoth(d.width, unit)} × ${d.trimPricePerFt}/ft = ${(d.width * d.trimPricePerFt).toFixed(2)}</p>
                       )}
                     </div>
                   ))}
@@ -466,8 +484,8 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                       </div>
                       <div className="grid grid-cols-4 gap-1.5">
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-muted-foreground">X (ft)</Label>
-                          <p className="text-[9px] text-muted-foreground">{Math.round(c.x * 12)}"</p>
+                          <Label className="text-[10px] text-muted-foreground">X ({unit === "ft" ? "ft" : "in"})</Label>
+                          <p className="text-[9px] text-muted-foreground">{fmtDimBoth(c.x, unit)}</p>
                           <input
                             type="number"
                             step="0.5"
@@ -478,8 +496,8 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                           />
                         </div>
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-muted-foreground">Y (ft)</Label>
-                          <p className="text-[9px] text-muted-foreground">{Math.round(c.y * 12)}"</p>
+                          <Label className="text-[10px] text-muted-foreground">Y ({unit === "ft" ? "ft" : "in"})</Label>
+                          <p className="text-[9px] text-muted-foreground">{fmtDimBoth(c.y, unit)}</p>
                           <input
                             type="number"
                             step="0.5"
@@ -490,8 +508,8 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                           />
                         </div>
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-muted-foreground">W (ft)</Label>
-                          <p className="text-[9px] text-muted-foreground">{Math.round(c.w * 12)}"</p>
+                          <Label className="text-[10px] text-muted-foreground">W ({unit === "ft" ? "ft" : "in"})</Label>
+                          <p className="text-[9px] text-muted-foreground">{fmtDimBoth(c.w, unit)}</p>
                           <input
                             type="number"
                             step="0.5"
@@ -502,8 +520,8 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                           />
                         </div>
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-muted-foreground">H (ft)</Label>
-                          <p className="text-[9px] text-muted-foreground">{Math.round(c.h * 12)}"</p>
+                          <Label className="text-[10px] text-muted-foreground">H ({unit === "ft" ? "ft" : "in"})</Label>
+                          <p className="text-[9px] text-muted-foreground">{fmtDimBoth(c.h, unit)}</p>
                           <input
                             type="number"
                             step="0.5"
@@ -615,8 +633,8 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                           </select>
                         </div>
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-muted-foreground">X (ft)</Label>
-                          <p className="text-[9px] text-muted-foreground">{Math.round(o.x * 12)}"</p>
+                          <Label className="text-[10px] text-muted-foreground">X ({unit === "ft" ? "ft" : "in"})</Label>
+                          <p className="text-[9px] text-muted-foreground">{fmtDimBoth(o.x, unit)}</p>
                           <input
                             type="number"
                             step="0.5"
@@ -627,8 +645,8 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                           />
                         </div>
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-muted-foreground">Y (ft)</Label>
-                          <p className="text-[9px] text-muted-foreground">{Math.round(o.y * 12)}"</p>
+                          <Label className="text-[10px] text-muted-foreground">Y ({unit === "ft" ? "ft" : "in"})</Label>
+                          <p className="text-[9px] text-muted-foreground">{fmtDimBoth(o.y, unit)}</p>
                           <input
                             type="number"
                             step="0.5"
@@ -639,8 +657,8 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                           />
                         </div>
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-muted-foreground">W (ft)</Label>
-                          <p className="text-[9px] text-muted-foreground">{Math.round(o.w * 12)}"</p>
+                          <Label className="text-[10px] text-muted-foreground">W ({unit === "ft" ? "ft" : "in"})</Label>
+                          <p className="text-[9px] text-muted-foreground">{fmtDimBoth(o.w, unit)}</p>
                           <input
                             type="number"
                             step="0.5"
@@ -651,8 +669,8 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                           />
                         </div>
                         <div className="space-y-0.5">
-                          <Label className="text-[10px] text-muted-foreground">H (ft)</Label>
-                          <p className="text-[9px] text-muted-foreground">{Math.round(o.h * 12)}"</p>
+                          <Label className="text-[10px] text-muted-foreground">H ({unit === "ft" ? "ft" : "in"})</Label>
+                          <p className="text-[9px] text-muted-foreground">{fmtDimBoth(o.h, unit)}</p>
                           <input
                             type="number"
                             step="0.5"
@@ -664,7 +682,7 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
                         </div>
                       </div>
                       {o.w > 0 && o.h > 0 && (
-                        <p className="text-[10px] text-muted-foreground">{OBSTACLE_INFO[o.type].label} · {o.w}'×{o.h}' = {Math.round(o.w * 12)}"×{Math.round(o.h * 12)}" = {(o.w * o.h).toFixed(1)} sq ft</p>
+                        <p className="text-[10px] text-muted-foreground">{OBSTACLE_INFO[o.type].label} · {fmtDim(o.w, unit)}×{fmtDim(o.h, unit)} = {(o.w * o.h).toFixed(1)} sq ft</p>
                       )}
                     </div>
                   ))}
@@ -725,13 +743,13 @@ function RoomDesigner({ room, projectId, isFree, onDelete, token }: {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">Width (in)</Label>
-                  <p className="text-[10px] text-muted-foreground">{(materialWidth / 12).toFixed(2)}' / {materialWidth}"</p>
+                  <Label className="text-xs">Width ({unit === "ft" ? "ft" : "in"})</Label>
+                  <p className="text-[10px] text-muted-foreground">{fmtDimBoth(materialWidth / 12, unit)}</p>
                   <Input type="number" step="0.5" value={materialWidth} onChange={(e) => setMaterialWidth(parseFloat(e.target.value) || 0)} data-testid={`input-mat-width-${room.id}`} />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Length (in)</Label>
-                  <p className="text-[10px] text-muted-foreground">{(materialLength / 12).toFixed(2)}' / {materialLength}"</p>
+                  <Label className="text-xs">Length ({unit === "ft" ? "ft" : "in"})</Label>
+                  <p className="text-[10px] text-muted-foreground">{fmtDimBoth(materialLength / 12, unit)}</p>
                   <Input type="number" step="0.5" value={materialLength} onChange={(e) => setMaterialLength(parseFloat(e.target.value) || 0)} data-testid={`input-mat-length-${room.id}`} />
                 </div>
               </div>

@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback, type FC } from "react";
 import type { LayoutResult, PlankRect, Doorway, Closet, RoomShape, TrimType, Obstacle } from "@/lib/layout-engine";
 import { TRIM_INFO, OBSTACLE_INFO } from "@/lib/layout-engine";
+import { fmtDim, type DisplayUnit } from "@/lib/units";
 
 interface LayoutCanvasProps {
   result: LayoutResult;
@@ -12,6 +13,7 @@ interface LayoutCanvasProps {
   doorways?: Doorway[];
   closets?: Closet[];
   obstacles?: Obstacle[];
+  unit?: DisplayUnit;
   onDoorwayMove?: (id: string, offset: number) => void;
   onClosetMove?: (id: string, x: number, y: number) => void;
   onClosetResize?: (id: string, w: number, h: number) => void;
@@ -39,6 +41,7 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
   doorways = [],
   closets = [],
   obstacles = [],
+  unit = "ft",
   onDoorwayMove,
   onClosetMove,
   onClosetResize,
@@ -424,11 +427,9 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
 
       // Dimension labels (width on bottom, height on right)
       ctx.font = "500 8px Satoshi, sans-serif";
-      const cwInches = Math.round(c.w * 12);
-      const chInches = Math.round(c.h * 12);
 
       // Width label
-      const cwLabel = `${c.w}' (${cwInches}")`;
+      const cwLabel = fmtDim(c.w, unit);
       const cwMetrics = ctx.measureText(cwLabel);
       const cwLabelW = cwMetrics.width + 6;
       const cwLabelH = 10;
@@ -440,7 +441,7 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       ctx.fillText(cwLabel, cwLabelX, cwLabelY);
 
       // Height label (rotated)
-      const chLabel = `${c.h}' (${chInches}")`;
+      const chLabel = fmtDim(c.h, unit);
       ctx.save();
       ctx.translate(cx + cw + 7, cy + ch / 2);
       ctx.rotate(Math.PI / 2);
@@ -578,9 +579,8 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
-      // Width label (bottom edge, centered) — feet + inches
-      const wInches = Math.round(o.w * 12);
-      const wLabel = `${o.w}' (${wInches}")`;
+      // Width label (bottom edge, centered)
+      const wLabel = fmtDim(o.w, unit);
       const wMetrics = ctx.measureText(wLabel);
       const wLabelW = wMetrics.width + 6;
       const wLabelH = 10;
@@ -591,9 +591,8 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       ctx.fillStyle = info.color;
       ctx.fillText(wLabel, wLabelX, wLabelY);
 
-      // Height label (right edge, centered, rotated) — feet + inches
-      const hInches = Math.round(o.h * 12);
-      const hLabel = `${o.h}' (${hInches}")`;
+      // Height label (right edge, centered, rotated)
+      const hLabel = fmtDim(o.h, unit);
       ctx.save();
       ctx.translate(ox + ow + 7, oy + oh / 2);
       ctx.rotate(Math.PI / 2);
@@ -737,7 +736,7 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
       ctx.textBaseline = "middle";
       const labelX = d.wall === "west" ? -12 : d.wall === "east" ? canvasW + 12 : doorOff + doorW / 2;
       const labelY = d.wall === "north" ? -8 : d.wall === "south" ? canvasH + 8 : doorOff + doorW / 2;
-      ctx.fillText(`${d.label || "Door"} (${d.width}' / ${Math.round(d.width * 12)}")`, labelX, labelY);
+      ctx.fillText(`${d.label || "Door"} (${fmtDim(d.width, unit)})`, labelX, labelY);
 
       // Draw transition trim if set
       if (d.trimType && d.trimType !== "none") {
@@ -784,7 +783,7 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
           case "east": tLx = canvasW - inset - 8; tLy = doorOff + doorW / 2; break;
         }
         // Small background for readability
-        const tText = `${trimInfo.label} (${d.width}' / ${Math.round(d.width * 12)}")`;
+        const tText = `${trimInfo.label} (${fmtDim(d.width, unit)})`;
         ctx.font = "500 8px Satoshi, sans-serif";
         const tMetrics = ctx.measureText(tText);
         const tW = tMetrics.width + 6;
@@ -803,11 +802,11 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
     ctx.font = "600 12px Satoshi, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`${roomWidth}' (${Math.round(roomWidth * 12)}")`, canvasW / 2, canvasH + 16);
+    ctx.fillText(fmtDim(roomWidth, unit), canvasW / 2, canvasH + 16);
     ctx.save();
     ctx.translate(-16, canvasH / 2);
     ctx.rotate(-Math.PI / 2);
-    ctx.fillText(`${roomLength}' (${Math.round(roomLength * 12)}")`, 0, 0);
+    ctx.fillText(fmtDim(roomLength, unit), 0, 0);
     ctx.restore();
 
     // Stagger indicator
@@ -842,7 +841,7 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
           ctx.lineTo(hx2 - 4, arrowY + 3);
           ctx.stroke();
 
-          const labelText = `${staggerInches}" (${(staggerInches / 12).toFixed(1)}') stagger`;
+          const labelText = unit === "in" ? `${staggerInches}" stagger` : `${(staggerInches / 12).toFixed(1)}' stagger`;
           ctx.font = "600 10px Satoshi, sans-serif";
           const metrics = ctx.measureText(labelText);
           const labelW = metrics.width + 8;
@@ -862,7 +861,7 @@ const LayoutCanvas: FC<LayoutCanvasProps> = ({
         }
       }
     }
-  }, [result, roomWidth, roomLength, pattern, staggerInches, roomShape, doorways, closets, obstacles, hoverTarget, dragTarget, onResizeRoom]);
+  }, [result, roomWidth, roomLength, pattern, staggerInches, roomShape, doorways, closets, obstacles, unit, hoverTarget, dragTarget, onResizeRoom]);
 
   const cursor = dragTarget
     ? dragTarget.type === "closet-resize" || dragTarget.type === "obstacle-resize"
